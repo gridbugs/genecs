@@ -123,9 +123,28 @@ impl ComponentTypeSet {
 {{/each}}
 }
 
+struct ComponentDirtyFlags {
+    insert: bool,
+    remove: bool,
+}
+
+impl ComponentDirtyFlags {
+    fn new() -> Self {
+        ComponentDirtyFlags {
+            insert: false,
+            remove: false,
+        }
+    }
+
+    fn clean(&mut self) {
+        self.insert = false;
+        self.remove = false;
+    }
+}
+
 struct DirtyComponentTracker {
 {{#each queried_components}}
-    {{ @key }}: bool,
+    {{ @key }}: ComponentDirtyFlags,
 {{/each}}
 }
 
@@ -133,10 +152,17 @@ impl DirtyComponentTracker {
     fn new() -> Self {
         DirtyComponentTracker {
 {{#each queried_components}}
-            {{ @key }}: true,
+            {{ @key }}: ComponentDirtyFlags::new(),
 {{/each}}
         }
     }
+
+{{#each query}}
+    fn should_populate_{{id}}(&self) -> bool {
+        (true {{#each components}}&& self.{{id}}.insert {{/each}}) ||
+        (false {{#each components}}|| self.{{id}}.remove {{/each}})
+    }
+{{/each}}
 }
 
 pub struct EcsTable {
@@ -256,7 +282,7 @@ impl EcsCtx {
         self.table.insert_{{id}}(entity, value);
         self.tracker.entry(entity).or_insert_with(ComponentTypeSet::new).insert_{{id}}();
         {{#if queried}}
-        self.set_dirty_{{id}}();
+        self.set_dirty_insert_{{id}}();
         {{/if}}
     }
 
@@ -276,7 +302,7 @@ impl EcsCtx {
         self.table.insert_{{id}}(entity);
         self.tracker.entry(entity).or_insert_with(ComponentTypeSet::new).insert_{{id}}();
         {{#if queried}}
-        self.set_dirty_{{id}}();
+        self.set_dirty_insert_{{id}}();
         {{/if}}
     }
 
@@ -295,13 +321,16 @@ impl EcsCtx {
             self.tracker.remove(&entity);
         }
         {{#if queried}}
-        self.set_dirty_{{id}}();
+        self.set_dirty_remove_{{id}}();
         {{/if}}
     }
 
     {{#if queried}}
-    fn set_dirty_{{id}}(&self) {
-        self.query_ctx_mut().dirty.{{id}} = true;
+    fn set_dirty_insert_{{id}}(&self) {
+        self.query_ctx_mut().dirty.{{id}}.insert = true;
+    }
+    fn set_dirty_remove_{{id}}(&self) {
+        self.query_ctx_mut().dirty.{{id}}.remove = true;
     }
     {{/if}}
 {{/each}}
@@ -360,7 +389,7 @@ impl EcsCtx {
 {{#each query}}
     pub fn {{id}}(&self) -> {{prefix}}Iter {
         let query_ctx = self.query_ctx_mut();
-        if false {{#each components}}|| query_ctx.dirty.{{id}} {{/each}} {
+        if query_ctx.dirty.should_populate_{{id}}() {
 
             // identify the component with the least number of entities
             let mut _max = usize::MAX;
@@ -405,7 +434,7 @@ impl EcsCtx {
             }
 
     {{#each components}}
-            query_ctx.dirty.{{id}} = false;
+            query_ctx.dirty.{{id}}.clean();
     {{/each}}
         }
 
