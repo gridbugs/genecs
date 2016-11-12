@@ -16,8 +16,9 @@ use rustc_serialize::json::{self, Json};
 
 const TEMPLATE: &'static str = r#"// Automatically generated. Do not edit.
 use std::collections::{BTreeMap, BTreeSet};
-use std::cell::Cell;
-use std::ptr;
+use std::cell::{Cell, UnsafeCell};
+use std::slice;
+use std::usize;
 
 {{#each imports}}
 use {{ this }};
@@ -38,9 +39,12 @@ const COMPONENT_SET_NUM_WORDS: usize = {{component_set_num_words}};
 pub type ComponentType = usize;
 
 pub mod component_type {
+    use std::usize;
+
 {{#each component}}
     pub const {{id_uppercase}}: usize = {{index}};
 {{/each}}
+    pub const INVALID_COMPONENT: usize = usize::MAX;
 }
 
 pub struct ComponentTypeSet {
@@ -180,6 +184,10 @@ impl EcsTable {
     pub fn remove_{{id}}(&mut self, entity: EntityId) {
         self.{{id}}.remove(&entity);
     }
+
+    pub fn count_{{id}}(&self) -> usize {
+        self.{{id}}.len()
+    }
 {{/each}}
 
     pub fn remove_component(&mut self, entity: EntityId, component_type: ComponentType) {
@@ -196,14 +204,34 @@ impl EcsTable {
             self.remove_component(entity, component_type);
         }
     }
+
+    pub fn push_component_entity_ids(&self, component_type: ComponentType, ids: &mut Vec<EntityId>) {
+        match component_type {
+{{#each component}}
+    {{#if type}}
+            component_type::{{id_uppercase}} => {
+                for id in self.{{id}}.keys() {
+                    ids.push(*id);
+                }
+            },
+    {{else}}
+            component_type::{{id_uppercase}} => {
+                for id in self.{{id}}.iter() {
+                    ids.push(*id);
+                }
+            },
+    {{/if}}
+{{/each}}
+            _ => panic!("Invalid component type: {}", component_type),
+        }
+    }
 }
 
 pub struct EcsCtx {
     table: EcsTable,
     tracker: EntityMap<ComponentTypeSet>,
-    dirty: DirtyComponentTracker,
     next_id: Cell<EntityId>,
-    query_ctx: QueryCtx,
+    query_ctx: UnsafeCell<QueryCtx>,
 }
 
 impl EcsCtx {
@@ -211,9 +239,14 @@ impl EcsCtx {
         EcsCtx {
             table: EcsTable::new(),
             tracker: EntityMap::new(),
-            dirty: DirtyComponentTracker::new(),
             next_id: Cell::new(0),
-            query_ctx: QueryCtx::new(),
+            query_ctx: UnsafeCell::new(QueryCtx::new()),
+        }
+    }
+
+    fn query_ctx_mut(&self) -> &mut QueryCtx {
+        unsafe {
+            &mut *self.query_ctx.get()
         }
     }
 
@@ -223,7 +256,7 @@ impl EcsCtx {
         self.table.insert_{{id}}(entity, value);
         self.tracker.entry(entity).or_insert_with(ComponentTypeSet::new).insert_{{id}}();
         {{#if queried}}
-        self.dirty.{{id}} = true;
+        self.set_dirty_{{id}}();
         {{/if}}
     }
 
@@ -243,7 +276,7 @@ impl EcsCtx {
         self.table.insert_{{id}}(entity);
         self.tracker.entry(entity).or_insert_with(ComponentTypeSet::new).insert_{{id}}();
         {{#if queried}}
-        self.dirty.{{id}} = true;
+        self.set_dirty_{{id}}();
         {{/if}}
     }
 
@@ -262,9 +295,15 @@ impl EcsCtx {
             self.tracker.remove(&entity);
         }
         {{#if queried}}
-        self.dirty.{{id}} = true;
+        self.set_dirty_{{id}}();
         {{/if}}
     }
+
+    {{#if queried}}
+    fn set_dirty_{{id}}(&self) {
+        self.query_ctx_mut().dirty.{{id}} = true;
+    }
+    {{/if}}
 {{/each}}
 
     pub fn remove_component(&mut self, entity: EntityId, component_type: ComponentType) {
@@ -275,8 +314,6 @@ impl EcsCtx {
             _ => panic!("Invalid component type: {}", component_type),
         }
     }
-
-
 
     pub fn remove_components(&mut self, entity: EntityId, component_type_set: ComponentTypeSet) {
         for component_type in component_type_set.iter() {
@@ -319,6 +356,62 @@ impl EcsCtx {
     pub fn alloc_entity_mut(&mut self) -> EntityRefMut {
         EntityRefMut::new(self.alloc_entity_id(), self)
     }
+
+{{#each query}}
+    pub fn {{id}}(&self) -> {{prefix}}Iter {
+        let query_ctx = self.query_ctx_mut();
+        if false {{#each components}}|| query_ctx.dirty.{{id}} {{/each}} {
+
+            // identify the component with the least number of entities
+            let mut _max = usize::MAX;
+            let mut component_type = component_type::INVALID_COMPONENT;
+
+    {{#each components}}
+            let count = self.table.count_{{id}}();
+            if count < _max {
+                _max = count;
+                component_type = component_type::{{id_uppercase}};
+            }
+    {{/each}}
+
+            // collect the ids of the component
+            query_ctx.tmp_entity_ids.clear();
+            self.table.push_component_entity_ids(component_type, &mut query_ctx.tmp_entity_ids);
+
+            // populate the results
+            query_ctx.{{id}}.results.clear();
+
+            for id in query_ctx.tmp_entity_ids.iter() {
+    {{#each components}}
+        {{#if type}}
+                let {{id}} = if let Some(component) = self.table.{{id}}(*id) {
+                    component as *const {{type}}
+                } else {
+                    continue;
+                };
+        {{/if}}
+    {{/each}}
+
+                let result = {{prefix}}InnerResult {
+                    id: *id,
+    {{#each components}}
+        {{#if type}}
+                    {{id}}: {{id}},
+        {{/if}}
+    {{/each}}
+                };
+
+                query_ctx.{{id}}.results.push(result);
+            }
+
+    {{#each components}}
+            query_ctx.dirty.{{id}} = false;
+    {{/each}}
+        }
+
+        query_ctx.{{id}}.iter()
+    }
+{{/each}}
 }
 
 #[derive(Clone, Copy)]
@@ -422,6 +515,19 @@ pub struct {{prefix}}Result<'a> {
     {{/each}}
 }
 
+pub struct {{prefix}}Iter<'a> {
+    slice_iter: slice::Iter<'a, {{prefix}}InnerResult>,
+}
+
+impl<'a> Iterator for {{prefix}}Iter<'a> {
+    type Item = {{prefix}}Result<'a>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.slice_iter.next().map(|inner| {
+            inner.to_outer_result()
+        })
+    }
+}
+
 struct {{prefix}}InnerResult {
     id: EntityId,
     {{#each components}}
@@ -432,17 +538,6 @@ struct {{prefix}}InnerResult {
 }
 
 impl {{prefix}}InnerResult {
-    fn new_null(id: EntityId) -> Self {
-        {{prefix}}InnerResult {
-            id: id,
-{{#each components}}
-    {{#if type}}
-            {{id}}: ptr::null(),
-    {{/if}}
-{{/each}}
-        }
-    }
-
     fn to_outer_result(&self) -> {{prefix}}Result {
         unsafe {
             {{prefix}}Result {
@@ -467,10 +562,18 @@ impl {{prefix}}QueryCtx {
             results: Vec::new(),
         }
     }
+
+    fn iter(&self) -> {{prefix}}Iter {
+        {{prefix}}Iter {
+            slice_iter: self.results.iter(),
+        }
+    }
 }
 {{/each}}
 
 struct QueryCtx {
+    tmp_entity_ids: Vec<EntityId>,
+    dirty: DirtyComponentTracker,
 {{#each query}}
     {{id}}: {{prefix}}QueryCtx,
 {{/each}}
@@ -479,6 +582,8 @@ struct QueryCtx {
 impl QueryCtx {
     fn new() -> Self {
         QueryCtx {
+            tmp_entity_ids: Vec::new(),
+            dirty: DirtyComponentTracker::new(),
 {{#each query}}
             {{id}}: {{prefix}}QueryCtx::new(),
 {{/each}}
