@@ -6,3 +6,4 @@ authors = ["Stephen Sherratt <stephen@sherra.tt>"]
 [dependencies]
 handlebars = "0.22.0"
 tomson = "0.1.1"
+rustc-serialize = "0.3.19"
