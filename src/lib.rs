@@ -407,34 +407,51 @@ impl EcsCtx {
             }
     {{/each}}
 
-            // collect the ids of the component
-            query_ctx.tmp_entity_ids.clear();
-            self.table.push_component_entity_ids(component_type, &mut query_ctx.tmp_entity_ids);
-
-            // populate the results
             query_ctx.{{id}}.results.clear();
 
-            for id in query_ctx.tmp_entity_ids.iter() {
+            match component_type {
     {{#each components}}
+                component_type::{{id_uppercase}} => {
         {{#if type}}
-                let {{id}} = if let Some(component) = self.table.{{id}}(*id) {
-                    component as *const {{type}}
-                } else {
-                    continue;
-                };
+                    for (id, value) in self.table.{{id}}.iter() {
+                        let {{id}} = value as *const {{type}};
+            {{#each other_components}}
+                        let {{id}} = if let Some(component) = self.table.{{id}}(*id) {
+                            component as *const {{type}}
+                        } else {
+                            continue;
+                        };
+            {{/each}}
+                        let result = {{../prefix}}InnerResult {
+                            id: *id,
+                            {{id}}: {{id}},
+            {{#each other_components}}
+                            {{id}}: {{id}},
+            {{/each}}
+                        };
+                        query_ctx.{{../id}}.results.push(result);
+                    }
+        {{else}}
+                    for id in self.table.{{id}}.iter() {
+            {{#each other_components}}
+                        let {{id}} = if let Some(component) = self.table.{{id}}(*id) {
+                            component as *const {{type}}
+                        } else {
+                            continue;
+                        };
+            {{/each}}
+                        let result = {{../prefix}}InnerResult {
+                            id: *id,
+            {{#each other_components}}
+                            {{id}}: {{id}},
+            {{/each}}
+                        };
+                        query_ctx.{{../id}}.results.push(result);
+                    }
         {{/if}}
+                }
     {{/each}}
-
-                let result = {{prefix}}InnerResult {
-                    id: *id,
-    {{#each components}}
-        {{#if type}}
-                    {{id}}: {{id}},
-        {{/if}}
-    {{/each}}
-                };
-
-                query_ctx.{{id}}.results.push(result);
+                _ => panic!("Invalid component type: {}", component_type),
             }
 
     {{#each components}}
@@ -661,7 +678,6 @@ impl {{prefix}}QueryCtx {
 {{/each}}
 
 struct QueryCtx {
-    tmp_entity_ids: Vec<EntityId>,
     dirty: DirtyComponentTracker,
 {{#each query}}
     {{id}}: {{prefix}}QueryCtx,
@@ -671,7 +687,6 @@ struct QueryCtx {
 impl QueryCtx {
     fn new() -> Self {
         QueryCtx {
-            tmp_entity_ids: Vec::new(),
             dirty: DirtyComponentTracker::new(),
 {{#each query}}
             {{id}}: {{prefix}}QueryCtx::new(),
@@ -981,14 +996,26 @@ fn generate_code(mut toml: String) -> String {
         let query_obj = query.as_object_mut().unwrap();
         query_obj.insert("id".to_string(), Json::String(id.to_string()));
         let components_json = query_obj.remove("components").unwrap();
-        let components_arr = components_json.as_array().unwrap();
-        let mut components_obj = json::Object::new();
-        for component in components_arr {
+        let component_names = components_json.as_array().unwrap();
+        let mut component_clone_arr = json::Array::new();
+        for component in component_names {
             let component_str = component.as_string().unwrap();
-            let clone = component_clones.get(component_str).unwrap().clone();
-            components_obj.insert(component_str.to_string(), Json::Object(clone));
+            let mut clone = component_clones.get(component_str).unwrap().clone();
+            let no_type = clone.get("type").is_none();
+            let mut result_components = json::Array::new();
+            for component_inner in component_names {
+                let component_inner_str = component_inner.as_string().unwrap();
+                if no_type || component_inner_str != component_str {
+                    let other_clone = component_clones.get(component_inner_str).unwrap().clone();
+                    if other_clone.get("type").is_some() {
+                        result_components.push(Json::Object(other_clone));
+                    }
+                }
+            }
+            clone.insert("other_components".to_string(), Json::Array(result_components));
+            component_clone_arr.push(Json::Object(clone));
         }
-        query_obj.insert("components".to_string(), Json::Object(components_obj));
+        query_obj.insert("components".to_string(), Json::Array(component_clone_arr));
     }
 
     json.as_object_mut().unwrap().insert("queried_components".to_string(), Json::Object(queried_components));
