@@ -34,7 +34,7 @@ pub const NUM_COMPONENTS: usize = {{num_components}};
 const WORD_SIZE: usize = {{word_size}};
 const WORD_BITS: usize = {{word_bits}};
 
-const COMPONENT_SET_NUM_WORDS: usize = {{component_set_num_words}};
+const COMPONENT_TYPE_SET_NUM_WORDS: usize = {{component_set_num_words}};
 
 pub type ComponentType = usize;
 
@@ -48,16 +48,16 @@ pub mod component_type {
 }
 
 pub struct ComponentTypeSet {
-    bitfields: [usize; COMPONENT_SET_NUM_WORDS],
+    bitfields: [usize; COMPONENT_TYPE_SET_NUM_WORDS],
 }
 
 pub struct ComponentTypeSetIter {
-    bitfields: [usize; COMPONENT_SET_NUM_WORDS],
+    bitfields: [usize; COMPONENT_TYPE_SET_NUM_WORDS],
     index: usize,
 }
 
 impl ComponentTypeSetIter {
-    fn new(bitfields: [usize; COMPONENT_SET_NUM_WORDS]) -> Self {
+    fn new(bitfields: [usize; COMPONENT_TYPE_SET_NUM_WORDS]) -> Self {
         ComponentTypeSetIter {
             bitfields: bitfields,
             index: 0,
@@ -68,10 +68,10 @@ impl ComponentTypeSetIter {
 impl Iterator for ComponentTypeSetIter {
     type Item = ComponentType;
     fn next(&mut self) -> Option<Self::Item> {
-        while self.index < COMPONENT_SET_NUM_WORDS && self.bitfields[self.index] == 0 {
+        while self.index < COMPONENT_TYPE_SET_NUM_WORDS && self.bitfields[self.index] == 0 {
             self.index += 1;
         }
-        if self.index == COMPONENT_SET_NUM_WORDS {
+        if self.index == COMPONENT_TYPE_SET_NUM_WORDS {
             return None;
         }
 
@@ -84,7 +84,7 @@ impl Iterator for ComponentTypeSetIter {
 impl ComponentTypeSet {
     pub fn new() -> Self {
         ComponentTypeSet {
-            bitfields: [0; COMPONENT_SET_NUM_WORDS],
+            bitfields: [0; COMPONENT_TYPE_SET_NUM_WORDS],
         }
     }
 
@@ -726,6 +726,7 @@ pub struct EcsAction {
     removals: ActionRemovalTable,
     removal_types: ComponentTypeSet,
     removed_entities: HashSet<EntityId>,
+    properties: EcsActionProperties,
 }
 
 impl EcsAction {
@@ -736,6 +737,7 @@ impl EcsAction {
             removals: ActionRemovalTable::new(),
             removal_types: ComponentTypeSet::new(),
             removed_entities: HashSet::new(),
+            properties: EcsActionProperties::new(),
         }
     }
 
@@ -759,6 +761,172 @@ impl EcsAction {
     pub fn remove_entity(&mut self, entity: EntityId) {
         self.removed_entities.insert(entity);
     }
+{{#each action_property}}
+    {{#if type}}
+    pub fn set_{{id}}(&mut self, value: {{type}}) {
+        self.properties.insert_{{id}}(value);
+    }
+    {{else}}
+    pub fn set_{{id}}(&mut self) {
+        self.properties.insert_{{id}}();
+    }
+    {{/if}}
+    pub fn clear_{{id}}(&mut self) {
+        self.properties.remove_{{id}}();
+    }
+{{/each}}
+}
+
+pub const NUM_ACTION_PROPERTIES: usize = {{num_action_properties}};
+const ACTION_PROPERTY_TYPE_SET_NUM_WORDS: usize = {{component_set_num_words}};
+
+pub type ActionPropertyType = usize;
+
+pub mod action_property_type {
+    use std::usize;
+
+{{#each action_property}}
+    pub const {{id_uppercase}}: usize = {{index}};
+{{/each}}
+}
+
+pub struct ActionPropertyTypeSet {
+    bitfields: [usize; ACTION_PROPERTY_TYPE_SET_NUM_WORDS],
+}
+
+pub struct ActionPropertyTypeSetIter {
+    bitfields: [usize; ACTION_PROPERTY_TYPE_SET_NUM_WORDS],
+    index: usize,
+}
+
+impl ActionPropertyTypeSetIter {
+    fn new(bitfields: [usize; ACTION_PROPERTY_TYPE_SET_NUM_WORDS]) -> Self {
+        ActionPropertyTypeSetIter {
+            bitfields: bitfields,
+            index: 0,
+        }
+    }
+}
+
+impl Iterator for ActionPropertyTypeSetIter {
+    type Item = ActionPropertyType;
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.index < ACTION_PROPERTY_TYPE_SET_NUM_WORDS && self.bitfields[self.index] == 0 {
+            self.index += 1;
+        }
+        if self.index == ACTION_PROPERTY_TYPE_SET_NUM_WORDS {
+            return None;
+        }
+
+        let trailing = self.bitfields[self.index].trailing_zeros() as usize;
+        self.bitfields[self.index] &= !(1 << trailing);
+        Some(self.index * WORD_BITS + trailing)
+    }
+}
+
+impl ActionPropertyTypeSet {
+    pub fn new() -> Self {
+        ActionPropertyTypeSet {
+            bitfields: [0; COMPONENT_TYPE_SET_NUM_WORDS],
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        for b in &self.bitfields {
+            if *b != 0 {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    pub fn clear(&mut self) {
+        for b in &mut self.bitfields {
+            *b = 0;
+        }
+    }
+
+    pub fn iter(&self) -> ActionPropertyTypeSetIter {
+        ActionPropertyTypeSetIter::new(self.bitfields)
+    }
+
+{{#each action_property}}
+    pub fn contains_{{id}}(&self) -> bool {
+        self.bitfields[{{set_index}}] & (1 << {{set_bit}}) != 0
+    }
+
+    pub fn insert_{{id}}(&mut self) {
+        self.bitfields[{{set_index}}] |= 1 << {{set_bit}};
+    }
+
+    pub fn remove_{{id}}(&mut self) {
+        self.bitfields[{{set_index}}] &= !(1 << {{set_bit}});
+    }
+{{/each}}
+}
+
+pub struct EcsActionProperties {
+    property_types: ActionPropertyTypeSet,
+{{#each action_property}}
+    {{#if type}}
+    {{id}}: Option<{{type}}>,
+    {{else}}
+    {{id}}: bool,
+    {{/if}}
+{{/each}}
+}
+
+impl EcsActionProperties {
+    pub fn new() -> Self {
+        EcsActionProperties {
+            property_types: ActionPropertyTypeSet::new(),
+{{#each action_property}}
+    {{#if type}}
+            {{id}}: None,
+    {{else}}
+            {{id}}: false,
+    {{/if}}
+{{/each}}
+        }
+    }
+
+    pub fn clear(&mut self) {
+        for property_type in self.property_types.iter() {
+            match property_type {
+{{#each action_property}}
+                action_property_type::{{id_uppercase}} => {
+    {{#if type}}
+                    self.{{id}} = None;
+    {{else}}
+                    self.{{id}} = false;
+    {{/if}}
+                }
+{{/each}}
+                _ => panic!("Invalid action property type: {}", property_type),
+            }
+        }
+        self.property_types.clear();
+    }
+
+{{#each action_property}}
+    {{#if type}}
+    pub fn insert_{{id}}(&mut self, value: {{type}}) {
+        self.{{id}} = Some(value);
+    }
+    {{else}}
+    pub fn insert_{{id}}(&mut self) {
+        self.{{id}} = true;
+    }
+    {{/if}}
+    pub fn remove_{{id}}(&mut self) {
+    {{#if type}}
+        self.{{id}} = None;
+    {{else}}
+        self.{{id}} = false;
+    {{/if}}
+    }
+{{/each}}
 }
 "#;
 
@@ -824,6 +992,20 @@ fn generate_code(mut toml: String) -> String {
     }
 
     json.as_object_mut().unwrap().insert("queried_components".to_string(), Json::Object(queried_components));
+
+    let num_action_properties = json.search("action_property").unwrap().as_object().unwrap().len();
+    json.as_object_mut().unwrap().insert("num_action_properties".to_string(), Json::U64(num_action_properties as u64));
+    index = 0;
+    for (id, action_property) in json.as_object_mut().unwrap().get_mut("action_property").unwrap().as_object_mut().unwrap().iter_mut() {
+        let action_property_obj = action_property.as_object_mut().unwrap();
+        action_property_obj.insert("index".to_string(), Json::U64(index as u64));
+        action_property_obj.insert("set_index".to_string(), Json::U64((index / word_bits) as u64));
+        action_property_obj.insert("set_bit".to_string(), Json::U64((index % word_bits) as u64));
+        action_property_obj.insert("id".to_string(), Json::String(id.to_string()));
+        action_property_obj.insert("id_uppercase".to_string(), Json::String(id.to_uppercase()));
+
+        index += 1;
+    }
 
     let mut handlebars = Handlebars::new();
 
