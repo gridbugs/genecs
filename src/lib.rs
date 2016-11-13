@@ -15,7 +15,7 @@ use rustc_serialize::json::{self, Json};
 
 
 const TEMPLATE: &'static str = r#"// Automatically generated. Do not edit.
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::cell::{Cell, UnsafeCell};
 use std::slice;
 use std::usize;
@@ -213,6 +213,10 @@ impl EcsTable {
 
     pub fn count_{{id}}(&self) -> usize {
         self.{{id}}.len()
+    }
+
+    pub fn clear_{{id}}(&mut self) {
+        self.{{id}}.clear();
     }
 {{/each}}
 
@@ -441,6 +445,62 @@ impl EcsCtx {
         query_ctx.{{id}}.iter()
     }
 {{/each}}
+
+    pub fn commit(&mut self, action: &mut EcsAction) {
+        self.commit_insertions(&mut action.insertions,
+                               &mut action.insertion_types);
+        self.commit_removals(&mut action.removals,
+                             &mut action.removal_types);
+        self.commit_removed_entities(&mut action.removed_entities);
+    }
+
+    fn commit_insertions(&mut self,
+                         insertions: &mut ActionInsertionTable,
+                         insertion_types: &mut ComponentTypeSet) {
+        for component_type in insertion_types.iter() {
+            match component_type {
+{{#each component}}
+                component_type::{{id_uppercase}} => {
+    {{#if type}}
+                    for (entity_id, value) in insertions.{{id}}.drain() {
+                        self.insert_{{id}}(entity_id, value);
+                    }
+    {{else}}
+                    for entity_id in insertions.{{id}}.drain() {
+                        self.insert_{{id}}(entity_id);
+                    }
+    {{/if}}
+                }
+{{/each}}
+                _ => panic!("Invalid component type: {}", component_type),
+            }
+        }
+        insertion_types.clear();
+    }
+
+    fn commit_removals(&mut self,
+                       removals: &mut ActionRemovalTable,
+                       removal_types: &mut ComponentTypeSet) {
+        for component_type in removal_types.iter() {
+            match component_type {
+{{#each component}}
+                component_type::{{id_uppercase}} => {
+                    for entity_id in removals.{{id}}.drain() {
+                        self.remove_{{id}}(entity_id);
+                    }
+                }
+{{/each}}
+                _ => panic!("Invalid component type: {}", component_type),
+            }
+        }
+        removal_types.clear();
+    }
+
+    fn commit_removed_entities(&mut self, removed_entities: &mut HashSet<EntityId>) {
+        for entity_id in removed_entities.drain() {
+            self.remove_entity(entity_id);
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -617,6 +677,87 @@ impl QueryCtx {
             {{id}}: {{prefix}}QueryCtx::new(),
 {{/each}}
         }
+    }
+}
+
+struct ActionInsertionTable {
+{{#each component}}
+    {{#if type}}
+    {{id}}: HashMap<EntityId, {{type}}>,
+    {{else}}
+    {{id}}: HashSet<EntityId>,
+    {{/if}}
+{{/each}}
+}
+
+impl ActionInsertionTable {
+    fn new() -> Self {
+        ActionInsertionTable {
+{{#each component}}
+    {{#if type}}
+            {{id}}: HashMap::new(),
+    {{else}}
+            {{id}}: HashSet::new(),
+    {{/if}}
+{{/each}}
+        }
+    }
+}
+
+struct ActionRemovalTable {
+{{#each component}}
+    {{id}}: HashSet<EntityId>,
+{{/each}}
+}
+
+impl ActionRemovalTable {
+    fn new() -> Self {
+        ActionRemovalTable {
+{{#each component}}
+            {{id}}: HashSet::new(),
+{{/each}}
+        }
+    }
+}
+
+pub struct EcsAction {
+    insertions: ActionInsertionTable,
+    insertion_types: ComponentTypeSet,
+    removals: ActionRemovalTable,
+    removal_types: ComponentTypeSet,
+    removed_entities: HashSet<EntityId>,
+}
+
+impl EcsAction {
+    pub fn new() -> Self {
+        EcsAction {
+            insertions: ActionInsertionTable::new(),
+            insertion_types: ComponentTypeSet::new(),
+            removals: ActionRemovalTable::new(),
+            removal_types: ComponentTypeSet::new(),
+            removed_entities: HashSet::new(),
+        }
+    }
+
+{{#each component}}
+    {{#if type}}
+    pub fn insert_{{id}}(&mut self, entity: EntityId, value: {{type}}) {
+        self.insertions.{{id}}.insert(entity, value);
+        self.insertion_types.insert_{{id}}();
+    }
+    {{else}}
+    pub fn insert_{{id}}(&mut self, entity: EntityId) {
+        self.insertions.{{id}}.insert(entity);
+        self.insertion_types.insert_{{id}}();
+    }
+    {{/if}}
+    pub fn remove_{{id}}(&mut self, entity: EntityId) {
+        self.removals.{{id}}.insert(entity);
+        self.removal_types.insert_{{id}}();
+    }
+{{/each}}
+    pub fn remove_entity(&mut self, entity: EntityId) {
+        self.removed_entities.insert(entity);
     }
 }
 "#;
