@@ -18,7 +18,7 @@ const TEMPLATE: &'static str = r#"// Automatically generated. Do not edit.
 #![allow(unused_imports)]
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::cell::{Cell, UnsafeCell, RefCell, Ref, RefMut};
+use std::cell::{UnsafeCell, RefCell, Ref, RefMut};
 use std::slice;
 use std::usize;
 
@@ -306,7 +306,6 @@ impl EcsTable {
 pub struct EcsCtx {
     table: EcsTable,
     tracker: EntityMap<ComponentTypeSet>,
-    next_id: Cell<EntityId>,
     query_ctx: UnsafeCell<QueryCtx>,
 }
 
@@ -315,7 +314,6 @@ impl EcsCtx {
         EcsCtx {
             table: EcsTable::new(),
             tracker: EntityMap::new(),
-            next_id: Cell::new(0),
             query_ctx: UnsafeCell::new(QueryCtx::new()),
         }
     }
@@ -433,34 +431,12 @@ impl EcsCtx {
         }
     }
 
-    pub fn entity(&self, id: EntityId) -> Option<EntityRef> {
-        if id < self.next_id.get() {
-            Some(EntityRef::new(id, self))
-        } else {
-            None
-        }
+    pub fn entity(&self, id: EntityId) -> EntityRef {
+        EntityRef::new(id, self)
     }
 
-    pub fn entity_mut(&mut self, id: EntityId) -> Option<EntityRefMut> {
-        if id < self.next_id.get() {
-            Some(EntityRefMut::new(id, self))
-        } else {
-            None
-        }
-    }
-
-    pub fn alloc_entity_id(&self) -> EntityId {
-        let id = self.next_id.get();
-        self.next_id.set(id + 1);
-        id
-    }
-
-    pub fn alloc_entity(&self) -> EntityRef {
-        EntityRef::new(self.alloc_entity_id(), self)
-    }
-
-    pub fn alloc_entity_mut(&mut self) -> EntityRefMut {
-        EntityRefMut::new(self.alloc_entity_id(), self)
+    pub fn entity_mut(&mut self, id: EntityId) -> EntityRefMut {
+        EntityRefMut::new(id, self)
     }
 
 {{#each query}}
