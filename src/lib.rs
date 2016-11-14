@@ -1062,9 +1062,18 @@ impl EcsActionProperties {
     pub fn insert_{{id}}(&mut self, value: {{type}}) {
         self.{{id}} = Some(value);
     }
+        {{#if copy}}
+    pub fn {{id}}(&self) -> Option<{{type}}> {
+        self.{{id}}
+    }
+    pub fn {{id}}_ref(&self) -> Option<&{{type}}> {
+        self.{{id}}.as_ref()
+    }
+        {{else}}
     pub fn {{id}}(&self) -> Option<&{{type}}> {
         self.{{id}}.as_ref()
     }
+        {{/if}}
     pub fn contains_{{id}}(&self) -> bool {
         self.{{id}}.is_some()
     }
