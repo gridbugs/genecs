@@ -664,6 +664,16 @@ impl<'a> EntityRef<'a> {
 {{/each}}
 }
 
+pub trait EntityPopulate {
+{{#each component}}
+    {{#if type}}
+    fn insert_{{id}}(&mut self, value: {{type}});
+    {{else}}
+    fn insert_{{id}}(&mut self);
+    {{/if}}
+{{/each}}
+}
+
 pub struct EntityRefMut<'a> {
     id: EntityId,
     ctx: &'a mut EcsCtx,
@@ -733,11 +743,18 @@ impl<'a> EntityRefMut<'a> {
         self.ctx.{{id}}_mut(self.id)
     }
         {{/if}}
-    pub fn insert_{{id}}(&mut self, value: {{type}}) {
+    {{/if}}
+{{/each}}
+}
+
+impl<'a> EntityPopulate for EntityRefMut<'a> {
+{{#each component}}
+    {{#if type}}
+    fn insert_{{id}}(&mut self, value: {{type}}) {
         self.ctx.insert_{{id}}(self.id, value);
     }
     {{else}}
-    pub fn insert_{{id}}(&mut self) {
+    fn insert_{{id}}(&mut self) {
         self.ctx.insert_{{id}}(self.id);
     }
     {{/if}}
