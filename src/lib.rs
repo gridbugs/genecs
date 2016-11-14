@@ -15,8 +15,10 @@ use rustc_serialize::json::{self, Json};
 
 
 const TEMPLATE: &'static str = r#"// Automatically generated. Do not edit.
+#![allow(unused_imports)]
+
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::cell::{Cell, UnsafeCell};
+use std::cell::{Cell, UnsafeCell, RefCell, Ref, RefMut};
 use std::slice;
 use std::usize;
 
@@ -167,7 +169,15 @@ impl DirtyComponentTracker {
 
 pub struct EcsTable {
 {{#each component}}
-    {{id}}: {{#if type}} EntityMap<{{type}}> {{else}} EntitySet {{/if}},
+    {{#if type}}
+        {{#if refcell}}
+    {{id}}: EntityMap<RefCell<{{type}}>>,
+        {{else}}
+    {{id}}: EntityMap<{{type}}>,
+        {{/if}}
+    {{else}}
+    {{id}}: EntitySet,
+    {{/if}}
 {{/each}}
 }
 
@@ -182,21 +192,57 @@ impl EcsTable {
 
 {{#each component}}
     {{#if type}}
+        {{#if refcell}}
+    pub fn insert_{{id}}(&mut self, entity: EntityId, value: {{type}}) {
+        self.{{id}}.insert(entity, RefCell::new(value));
+    }
+        {{else}}
     pub fn insert_{{id}}(&mut self, entity: EntityId, value: {{type}}) {
         self.{{id}}.insert(entity, value);
     }
+        {{/if}}
 
     pub fn contains_{{id}}(&self, entity: EntityId) -> bool {
         self.{{id}}.contains_key(&entity)
     }
 
+        {{#if copy}}
+    pub fn {{id}}(&self, entity: EntityId) -> Option<{{type}}> {
+        self.{{id}}.get(&entity).map(|r| *r)
+    }
+    pub fn {{id}}_ref(&self, entity: EntityId) -> Option<&{{type}}> {
+        self.{{id}}.get(&entity)
+    }
+        {{else}}
+            {{#if refcell}}
+
+    pub fn {{id}}(&self, entity: EntityId) -> Option<&RefCell<{{type}}>> {
+        self.{{id}}.get(&entity)
+    }
+    pub fn {{id}}_borrow(&self, entity: EntityId) -> Option<Ref<{{type}}>> {
+        self.{{id}}.get(&entity).map(|e| e.borrow())
+    }
+    pub fn {{id}}_borrow_mut(&self, entity: EntityId) -> Option<RefMut<{{type}}>> {
+        self.{{id}}.get(&entity).map(|e| e.borrow_mut())
+    }
+
+            {{else}}
     pub fn {{id}}(&self, entity: EntityId) -> Option<&{{type}}> {
         self.{{id}}.get(&entity)
     }
+            {{/if}}
+        {{/if}}
 
+
+        {{#if refcell}}
+    pub fn {{id}}_mut(&mut self, entity: EntityId) -> Option<&mut RefCell<{{type}}>> {
+        self.{{id}}.get_mut(&entity)
+    }
+        {{else}}
     pub fn {{id}}_mut(&mut self, entity: EntityId) -> Option<&mut {{type}}> {
         self.{{id}}.get_mut(&entity)
     }
+        {{/if}}
     {{else}}
     pub fn insert_{{id}}(&mut self, entity: EntityId) {
         self.{{id}}.insert(entity);
@@ -294,13 +340,40 @@ impl EcsCtx {
         self.table.contains_{{id}}(entity)
     }
 
+        {{#if copy}}
+    pub fn {{id}}(&self, entity: EntityId) -> Option<{{type}}> {
+        self.table.{{id}}(entity)
+    }
+    pub fn {{id}}_ref(&self, entity: EntityId) -> Option<&{{type}}> {
+        self.table.{{id}}_ref(entity)
+    }
+        {{else}}
+            {{#if refcell}}
+    pub fn {{id}}(&self, entity: EntityId) -> Option<&RefCell<{{type}}>> {
+        self.table.{{id}}(entity)
+    }
+    pub fn {{id}}_borrow(&self, entity: EntityId) -> Option<Ref<{{type}}>> {
+        self.table.{{id}}_borrow(entity)
+    }
+    pub fn {{id}}_borrow_mut(&self, entity: EntityId) -> Option<RefMut<{{type}}>> {
+        self.table.{{id}}_borrow_mut(entity)
+    }
+            {{else}}
     pub fn {{id}}(&self, entity: EntityId) -> Option<&{{type}}> {
         self.table.{{id}}(entity)
     }
+            {{/if}}
+        {{/if}}
 
+        {{#if refcell}}
+    pub fn {{id}}_mut(&mut self, entity: EntityId) -> Option<&mut RefCell<{{type}}>> {
+        self.table.{{id}}_mut(entity)
+    }
+        {{else}}
     pub fn {{id}}_mut(&mut self, entity: EntityId) -> Option<&mut {{type}}> {
         self.table.{{id}}_mut(entity)
     }
+        {{/if}}
     {{else}}
     pub fn insert_{{id}}(&mut self, entity: EntityId) {
         self.table.insert_{{id}}(entity);
@@ -416,7 +489,13 @@ impl EcsCtx {
                     for (id, value) in self.table.{{id}}.iter() {
                         let {{id}} = value as *const {{type}};
             {{#each other_components}}
-                        let {{id}} = if let Some(component) = self.table.{{id}}(*id) {
+                        let {{id}} = if let Some(component) =
+                {{#if copy}}
+                            self.table.{{id}}_ref(*id)
+                {{else}}
+                            self.table.{{id}}(*id)
+                {{/if}}
+                        {
                             component as *const {{type}}
                         } else {
                             continue;
@@ -434,7 +513,13 @@ impl EcsCtx {
         {{else}}
                     for id in self.table.{{id}}.iter() {
             {{#each other_components}}
-                        let {{id}} = if let Some(component) = self.table.{{id}}(*id) {
+                        let {{id}} = if let Some(component) =
+                {{#if copy}}
+                            self.table.{{id}}_ref(*id)
+                {{else}}
+                            self.table.{{id}}(*id)
+                {{/if}}
+                        {
                             component as *const {{type}}
                         } else {
                             continue;
@@ -551,9 +636,30 @@ impl<'a> EntityRef<'a> {
         self.ctx.contains_{{id}}(self.id)
     }
     {{#if type}}
+        {{#if copy}}
+    pub fn {{id}}(self) -> Option<{{type}}> {
+        self.ctx.{{id}}(self.id)
+    }
+    pub fn {{id}}_ref(self) -> Option<&'a {{type}}> {
+        self.ctx.{{id}}_ref(self.id)
+    }
+        {{else}}
+            {{#if refcell}}
+    pub fn {{id}}(self) -> Option<&'a RefCell<{{type}}>> {
+        self.ctx.{{id}}(self.id)
+    }
+    pub fn {{id}}_borrow(self) -> Option<Ref<'a, {{type}}>> {
+        self.ctx.{{id}}_borrow(self.id)
+    }
+    pub fn {{id}}_borrow_mut(self) -> Option<RefMut<'a, {{type}}>> {
+        self.ctx.{{id}}_borrow_mut(self.id)
+    }
+            {{else}}
     pub fn {{id}}(self) -> Option<&'a {{type}}> {
         self.ctx.{{id}}(self.id)
     }
+            {{/if}}
+        {{/if}}
     {{/if}}
 {{/each}}
 }
@@ -594,12 +700,39 @@ impl<'a> EntityRefMut<'a> {
         self.ctx.remove_{{id}}(self.id)
     }
     {{#if type}}
+        {{#if copy}}
+    pub fn {{id}}(&self) -> Option<{{type}}> {
+        self.ctx.{{id}}(self.id)
+    }
+    pub fn {{id}}_ref(&self) -> Option<&{{type}}> {
+        self.ctx.{{id}}_ref(self.id)
+    }
+        {{else}}
+            {{#if refcell}}
+    pub fn {{id}}(&self) -> Option<&RefCell<{{type}}>> {
+        self.ctx.{{id}}(self.id)
+    }
+    pub fn {{id}}_borrow(&self) -> Option<Ref<{{type}}>> {
+        self.ctx.{{id}}_borrow(self.id)
+    }
+    pub fn {{id}}_borrow_mut(&self) -> Option<RefMut<{{type}}>> {
+        self.ctx.{{id}}_borrow_mut(self.id)
+    }
+            {{else}}
     pub fn {{id}}(&self) -> Option<&{{type}}> {
         self.ctx.{{id}}(self.id)
     }
+            {{/if}}
+        {{/if}}
+        {{#if refcell}}
+    pub fn {{id}}_mut(&mut self) -> Option<&mut RefCell<{{type}}>> {
+        self.ctx.{{id}}_mut(self.id)
+    }
+        {{else}}
     pub fn {{id}}_mut(&mut self) -> Option<&mut {{type}}> {
         self.ctx.{{id}}_mut(self.id)
     }
+        {{/if}}
     pub fn insert_{{id}}(&mut self, value: {{type}}) {
         self.ctx.insert_{{id}}(self.id, value);
     }
@@ -929,9 +1062,18 @@ impl EcsActionProperties {
     pub fn insert_{{id}}(&mut self, value: {{type}}) {
         self.{{id}} = Some(value);
     }
+    pub fn {{id}}(&self) -> Option<&{{type}}> {
+        self.{{id}}.as_ref()
+    }
+    pub fn contains_{{id}}(&self) -> bool {
+        self.{{id}}.is_some()
+    }
     {{else}}
     pub fn insert_{{id}}(&mut self) {
         self.{{id}} = true;
+    }
+    pub fn contains_{{id}}(&self) -> bool {
+        self.{{id}}
     }
     {{/if}}
     pub fn remove_{{id}}(&mut self) {
