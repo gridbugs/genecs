@@ -170,8 +170,8 @@ impl DirtyComponentTracker {
 pub struct EcsTable {
 {{#each component}}
     {{#if type}}
-        {{#if refcell}}
-    {{id}}: EntityMap<RefCell<{{type}}>>,
+        {{#if container}}
+    {{id}}: EntityMap<{{container}}<{{type}}>>,
         {{else}}
     {{id}}: EntityMap<{{type}}>,
         {{/if}}
@@ -192,9 +192,9 @@ impl EcsTable {
 
 {{#each component}}
     {{#if type}}
-        {{#if refcell}}
+        {{#if container}}
     pub fn insert_{{id}}(&mut self, entity: EntityId, value: {{type}}) {
-        self.{{id}}.insert(entity, RefCell::new(value));
+        self.{{id}}.insert(entity, {{container}}::new(value));
     }
         {{else}}
     pub fn insert_{{id}}(&mut self, entity: EntityId, value: {{type}}) {
@@ -214,17 +214,31 @@ impl EcsTable {
         self.{{id}}.get(&entity)
     }
         {{else}}
-            {{#if refcell}}
+            {{#if container}}
 
-    pub fn {{id}}(&self, entity: EntityId) -> Option<&RefCell<{{type}}>> {
+    pub fn {{id}}(&self, entity: EntityId) -> Option<&{{container}}<{{type}}>> {
         self.{{id}}.get(&entity)
     }
+                {{#if RefCell}}
     pub fn {{id}}_borrow(&self, entity: EntityId) -> Option<Ref<{{type}}>> {
         self.{{id}}.get(&entity).map(|e| e.borrow())
     }
     pub fn {{id}}_borrow_mut(&self, entity: EntityId) -> Option<RefMut<{{type}}>> {
         self.{{id}}.get(&entity).map(|e| e.borrow_mut())
     }
+                {{/if}}
+                {{#if UnsafeCell}}
+    pub fn {{id}}_unsafe_get_mut(&self, entity: EntityId) -> Option<&mut {{type}}> {
+        unsafe {
+            self.{{id}}.get(&entity).map(|e| &mut *e.get())
+        }
+    }
+    pub fn {{id}}_unsafe_get(&self, entity: EntityId) -> Option<&{{type}}> {
+        unsafe {
+            self.{{id}}.get(&entity).map(|e| &*e.get())
+        }
+    }
+                {{/if}}
 
             {{else}}
     pub fn {{id}}(&self, entity: EntityId) -> Option<&{{type}}> {
@@ -234,8 +248,8 @@ impl EcsTable {
         {{/if}}
 
 
-        {{#if refcell}}
-    pub fn {{id}}_mut(&mut self, entity: EntityId) -> Option<&mut RefCell<{{type}}>> {
+        {{#if container}}
+    pub fn {{id}}_mut(&mut self, entity: EntityId) -> Option<&mut {{container}}<{{type}}>> {
         self.{{id}}.get_mut(&entity)
     }
         {{else}}
@@ -346,16 +360,26 @@ impl EcsCtx {
         self.table.{{id}}_ref(entity)
     }
         {{else}}
-            {{#if refcell}}
-    pub fn {{id}}(&self, entity: EntityId) -> Option<&RefCell<{{type}}>> {
+            {{#if container}}
+    pub fn {{id}}(&self, entity: EntityId) -> Option<&{{container}}<{{type}}>> {
         self.table.{{id}}(entity)
     }
+                {{#if RefCell}}
     pub fn {{id}}_borrow(&self, entity: EntityId) -> Option<Ref<{{type}}>> {
         self.table.{{id}}_borrow(entity)
     }
     pub fn {{id}}_borrow_mut(&self, entity: EntityId) -> Option<RefMut<{{type}}>> {
         self.table.{{id}}_borrow_mut(entity)
     }
+                {{/if}}
+                {{#if UnsafeCell}}
+    pub fn {{id}}_unsafe_get_mut(&self, entity: EntityId) -> Option<&mut {{type}}> {
+        self.table.{{id}}_unsafe_get_mut(entity)
+    }
+    pub fn {{id}}_unsafe_get(&self, entity: EntityId) -> Option<&{{type}}> {
+        self.table.{{id}}_unsafe_get(entity)
+    }
+                {{/if}}
             {{else}}
     pub fn {{id}}(&self, entity: EntityId) -> Option<&{{type}}> {
         self.table.{{id}}(entity)
@@ -363,8 +387,8 @@ impl EcsCtx {
             {{/if}}
         {{/if}}
 
-        {{#if refcell}}
-    pub fn {{id}}_mut(&mut self, entity: EntityId) -> Option<&mut RefCell<{{type}}>> {
+        {{#if container}}
+    pub fn {{id}}_mut(&mut self, entity: EntityId) -> Option<&mut {{container}}<{{type}}>> {
         self.table.{{id}}_mut(entity)
     }
         {{else}}
@@ -620,16 +644,26 @@ impl<'a> EntityRef<'a> {
         self.ctx.{{id}}_ref(self.id)
     }
         {{else}}
-            {{#if refcell}}
-    pub fn {{id}}(self) -> Option<&'a RefCell<{{type}}>> {
+            {{#if container}}
+    pub fn {{id}}(self) -> Option<&'a {{container}}<{{type}}>> {
         self.ctx.{{id}}(self.id)
     }
+                {{#if RefCell}}
     pub fn {{id}}_borrow(self) -> Option<Ref<'a, {{type}}>> {
         self.ctx.{{id}}_borrow(self.id)
     }
     pub fn {{id}}_borrow_mut(self) -> Option<RefMut<'a, {{type}}>> {
         self.ctx.{{id}}_borrow_mut(self.id)
     }
+                {{/if}}
+                {{#if UnsafeCell}}
+    pub fn {{id}}_unsafe_get_mut(self) -> Option<&'a mut {{type}}> {
+        self.ctx.{{id}}_unsafe_get_mut(self.id)
+    }
+    pub fn {{id}}_unsafe_get(self) -> Option<&'a {{type}}> {
+        self.ctx.{{id}}_unsafe_get(self.id)
+    }
+                {{/if}}
             {{else}}
     pub fn {{id}}(self) -> Option<&'a {{type}}> {
         self.ctx.{{id}}(self.id)
@@ -694,24 +728,34 @@ impl<'a> EntityRefMut<'a> {
         self.ctx.{{id}}_ref(self.id)
     }
         {{else}}
-            {{#if refcell}}
-    pub fn {{id}}(&self) -> Option<&RefCell<{{type}}>> {
+            {{#if container}}
+    pub fn {{id}}(&self) -> Option<&{{container}}<{{type}}>> {
         self.ctx.{{id}}(self.id)
     }
+                {{#if RefCell}}
     pub fn {{id}}_borrow(&self) -> Option<Ref<{{type}}>> {
         self.ctx.{{id}}_borrow(self.id)
     }
     pub fn {{id}}_borrow_mut(&self) -> Option<RefMut<{{type}}>> {
         self.ctx.{{id}}_borrow_mut(self.id)
     }
+                {{/if}}
+                {{#if UnsafeCell}}
+    pub fn {{id}}_unsafe_get_mut(&self) -> Option<&mut {{type}}> {
+        self.ctx.{{id}}_unsafe_get_mut(self.id)
+    }
+    pub fn {{id}}_unsafe_get(&self) -> Option<&{{type}}> {
+        self.ctx.{{id}}_unsafe_get(self.id)
+    }
+                {{/if}}
             {{else}}
     pub fn {{id}}(&self) -> Option<&{{type}}> {
         self.ctx.{{id}}(self.id)
     }
             {{/if}}
         {{/if}}
-        {{#if refcell}}
-    pub fn {{id}}_mut(&mut self) -> Option<&mut RefCell<{{type}}>> {
+        {{#if container}}
+    pub fn {{id}}_mut(&mut self) -> Option<&mut {{container}}<{{type}}>> {
         self.ctx.{{id}}_mut(self.id)
     }
         {{else}}
@@ -1126,6 +1170,14 @@ fn generate_code(mut toml: String) -> String {
         component_obj.insert("set_bit".to_string(), Json::U64((index % word_bits) as u64));
         component_obj.insert("id".to_string(), Json::String(id.to_string()));
         component_obj.insert("id_uppercase".to_string(), Json::String(id.to_uppercase()));
+
+        let maybe_container = component_obj.get("container").map(|container| {
+            container.clone()
+        });
+
+        if let Some(container) = maybe_container {
+            component_obj.insert(container.as_string().unwrap().to_string(), Json::Boolean(true));
+        }
 
         if queried_components.contains_key(id) {
             component_obj.insert("queried".to_string(), Json::Boolean(true));
