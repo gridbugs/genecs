@@ -1152,13 +1152,15 @@ fn generate_code(mut toml: String) -> String {
     json.as_object_mut().unwrap().insert("component_set_num_words".to_string(), Json::U64(component_set_num_words as u64));
 
     let mut queried_components = json::Object::new();
-    for query in json.as_object().unwrap().get("query").unwrap().as_object().unwrap().values() {
-        let query_obj = query.as_object().unwrap();
-        let components_json = query_obj.get("components").unwrap();
-        let components_arr = components_json.as_array().unwrap();
-        for component in components_arr {
-            let component_str = component.as_string().unwrap();
-            queried_components.insert(component_str.to_string(), Json::Boolean(true));
+    if let Some(query) = json.as_object().unwrap().get("query") {
+        for query in query.as_object().unwrap().values() {
+            let query_obj = query.as_object().unwrap();
+            let components_json = query_obj.get("components").unwrap();
+            let components_arr = components_json.as_array().unwrap();
+            for component in components_arr {
+                let component_str = component.as_string().unwrap();
+                queried_components.insert(component_str.to_string(), Json::Boolean(true));
+            }
         }
     }
 
@@ -1188,46 +1190,56 @@ fn generate_code(mut toml: String) -> String {
         index += 1;
     }
 
-    for (id, query) in json.as_object_mut().unwrap().get_mut("query").unwrap().as_object_mut().unwrap().iter_mut() {
-        let query_obj = query.as_object_mut().unwrap();
-        query_obj.insert("id".to_string(), Json::String(id.to_string()));
-        let components_json = query_obj.remove("components").unwrap();
-        let component_names = components_json.as_array().unwrap();
-        let mut component_clone_arr = json::Array::new();
-        for component in component_names {
-            let component_str = component.as_string().unwrap();
-            let mut clone = component_clones.get(component_str).unwrap().clone();
-            let no_type = clone.get("type").is_none();
-            let mut result_components = json::Array::new();
-            for component_inner in component_names {
-                let component_inner_str = component_inner.as_string().unwrap();
-                if no_type || component_inner_str != component_str {
-                    let other_clone = component_clones.get(component_inner_str).unwrap().clone();
-                    if other_clone.get("type").is_some() {
-                        result_components.push(Json::Object(other_clone));
+    if let Some(mut query) = json.as_object_mut().unwrap().get_mut("query") {
+        for (id, query) in query.as_object_mut().unwrap().iter_mut() {
+            let query_obj = query.as_object_mut().unwrap();
+            query_obj.insert("id".to_string(), Json::String(id.to_string()));
+            let components_json = query_obj.remove("components").unwrap();
+            let component_names = components_json.as_array().unwrap();
+            let mut component_clone_arr = json::Array::new();
+            for component in component_names {
+                let component_str = component.as_string().unwrap();
+                let mut clone = component_clones.get(component_str).unwrap().clone();
+                let no_type = clone.get("type").is_none();
+                let mut result_components = json::Array::new();
+                for component_inner in component_names {
+                    let component_inner_str = component_inner.as_string().unwrap();
+                    if no_type || component_inner_str != component_str {
+                        let other_clone = component_clones.get(component_inner_str).unwrap().clone();
+                        if other_clone.get("type").is_some() {
+                            result_components.push(Json::Object(other_clone));
+                        }
                     }
                 }
+                clone.insert("other_components".to_string(), Json::Array(result_components));
+                component_clone_arr.push(Json::Object(clone));
             }
-            clone.insert("other_components".to_string(), Json::Array(result_components));
-            component_clone_arr.push(Json::Object(clone));
+            query_obj.insert("components".to_string(), Json::Array(component_clone_arr));
         }
-        query_obj.insert("components".to_string(), Json::Array(component_clone_arr));
     }
 
     json.as_object_mut().unwrap().insert("queried_components".to_string(), Json::Object(queried_components));
 
-    let num_action_properties = json.search("action_property").unwrap().as_object().unwrap().len();
+    let num_action_properties = if let Some(action_property) = json.search("action_property") {
+        action_property.as_object().unwrap().len()
+    } else {
+        0
+    };
+
     json.as_object_mut().unwrap().insert("num_action_properties".to_string(), Json::U64(num_action_properties as u64));
     index = 0;
-    for (id, action_property) in json.as_object_mut().unwrap().get_mut("action_property").unwrap().as_object_mut().unwrap().iter_mut() {
-        let action_property_obj = action_property.as_object_mut().unwrap();
-        action_property_obj.insert("index".to_string(), Json::U64(index as u64));
-        action_property_obj.insert("set_index".to_string(), Json::U64((index / word_bits) as u64));
-        action_property_obj.insert("set_bit".to_string(), Json::U64((index % word_bits) as u64));
-        action_property_obj.insert("id".to_string(), Json::String(id.to_string()));
-        action_property_obj.insert("id_uppercase".to_string(), Json::String(id.to_uppercase()));
 
-        index += 1;
+    if let Some(mut action_property) = json.as_object_mut().unwrap().get_mut("action_property") {
+        for (id, action_property) in action_property.as_object_mut().unwrap().iter_mut() {
+            let action_property_obj = action_property.as_object_mut().unwrap();
+            action_property_obj.insert("index".to_string(), Json::U64(index as u64));
+            action_property_obj.insert("set_index".to_string(), Json::U64((index / word_bits) as u64));
+            action_property_obj.insert("set_bit".to_string(), Json::U64((index % word_bits) as u64));
+            action_property_obj.insert("id".to_string(), Json::String(id.to_string()));
+            action_property_obj.insert("id_uppercase".to_string(), Json::String(id.to_uppercase()));
+
+            index += 1;
+        }
     }
 
     let mut handlebars = Handlebars::new();
