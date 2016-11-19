@@ -783,6 +783,20 @@ impl<'a> EntityPopulate for EntityRefMut<'a> {
 {{/each}}
 }
 
+impl<'a> EntityPopulate for ActionEntityRefMut<'a> {
+{{#each component}}
+    {{#if type}}
+    fn insert_{{id}}(&mut self, value: {{type}}) {
+        self.action.insert_{{id}}(self.id, value);
+    }
+    {{else}}
+    fn insert_{{id}}(&mut self) {
+        self.action.insert_{{id}}(self.id);
+    }
+    {{/if}}
+{{/each}}
+}
+
 {{#each query}}
 pub struct {{prefix}}Result<'a> {
     id: EntityId,
@@ -962,6 +976,24 @@ impl EcsAction {
         self.properties.remove_{{id}}();
     }
 {{/each}}
+
+    pub fn entity_mut(&mut self, id: EntityId) -> ActionEntityRefMut {
+        ActionEntityRefMut::new(id, self)
+    }
+}
+
+pub struct ActionEntityRefMut<'a> {
+    id: EntityId,
+    action: &'a mut EcsAction,
+}
+
+impl<'a> ActionEntityRefMut<'a> {
+    fn new(id: EntityId, action: &'a mut EcsAction) -> Self {
+        ActionEntityRefMut {
+            id: id,
+            action: action,
+        }
+    }
 }
 
 pub const NUM_ACTION_PROPERTIES: usize = {{num_action_properties}};
