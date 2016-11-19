@@ -554,6 +554,8 @@ impl EcsCtx {
         self.commit_removals(&mut action.removals,
                              &mut action.removal_types);
         self.commit_removed_entities(&mut action.removed_entities);
+
+        action.properties.clear();
     }
 
     fn commit_insertions(&mut self,
