@@ -881,12 +881,12 @@ impl QueryCtx {
     }
 }
 
-struct ActionInsertionTable {
+pub struct ActionInsertionTable {
 {{#each component}}
     {{#if type}}
-    {{id}}: HashMap<EntityId, {{type}}>,
+    pub {{id}}: HashMap<EntityId, {{type}}>,
     {{else}}
-    {{id}}: HashSet<EntityId>,
+    pub {{id}}: HashSet<EntityId>,
     {{/if}}
 {{/each}}
 }
@@ -905,9 +905,9 @@ impl ActionInsertionTable {
     }
 }
 
-struct ActionRemovalTable {
+pub struct ActionRemovalTable {
 {{#each component}}
-    {{id}}: HashSet<EntityId>,
+    pub {{id}}: HashSet<EntityId>,
 {{/each}}
 }
 
@@ -922,12 +922,12 @@ impl ActionRemovalTable {
 }
 
 pub struct EcsAction {
-    insertions: ActionInsertionTable,
-    insertion_types: ComponentTypeSet,
-    removals: ActionRemovalTable,
-    removal_types: ComponentTypeSet,
-    removed_entities: HashSet<EntityId>,
-    properties: EcsActionProperties,
+    pub insertions: ActionInsertionTable,
+    pub insertion_types: ComponentTypeSet,
+    pub removals: ActionRemovalTable,
+    pub removal_types: ComponentTypeSet,
+    pub removed_entities: HashSet<EntityId>,
+    pub properties: EcsActionProperties,
 }
 
 impl EcsAction {
@@ -1089,9 +1089,9 @@ pub struct EcsActionProperties {
     property_types: ActionPropertyTypeSet,
 {{#each action_property}}
     {{#if type}}
-    {{id}}: Option<{{type}}>,
+    pub {{id}}: Option<{{type}}>,
     {{else}}
-    {{id}}: bool,
+    pub {{id}}: bool,
     {{/if}}
 {{/each}}
 }
