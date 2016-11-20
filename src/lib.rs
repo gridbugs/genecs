@@ -1067,6 +1067,12 @@ impl<'a> ActionEntityRefMut<'a> {
     pub fn id(&self) -> EntityId {
         self.id
     }
+
+{{#each component}}
+    pub fn remove_{{id}}(&mut self) {
+        self.action.remove_{{id}}(self.id);
+    }
+{{/each}}
 }
 
 pub const NUM_ACTION_PROPERTIES: usize = {{num_action_properties}};
