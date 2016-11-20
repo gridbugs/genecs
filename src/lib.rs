@@ -903,6 +903,31 @@ impl ActionInsertionTable {
 {{/each}}
         }
     }
+
+{{#each component}}
+    {{#if type}}
+        {{#if copy}}
+    pub fn {{id}}(&self, entity: EntityId) -> Option<{{type}}> {
+        self.{{id}}.get(&entity).map(|r| *r)
+    }
+    pub fn {{id}}_ref(&self, entity: EntityId) -> Option<&{{type}}> {
+        self.{{id}}.get(&entity)
+    }
+        {{else}}
+    pub fn {{id}}(&self, entity: EntityId) -> Option<&{{type}}> {
+        self.{{id}}.get(&entity)
+    }
+        {{/if}}
+    {{else}}
+    pub fn contains_{{id}}(&self, entity: EntityId) -> bool {
+        self.{{id}}.contains(&entity)
+    }
+    {{/if}}
+{{/each}}
+
+    pub fn entity(&self, id: EntityId) -> ActionInsertionEntityRef {
+        ActionInsertionEntityRef::new(id, self)
+    }
 }
 
 pub struct ActionRemovalTable {
@@ -980,6 +1005,50 @@ impl EcsAction {
     pub fn entity_mut(&mut self, id: EntityId) -> ActionEntityRefMut {
         ActionEntityRefMut::new(id, self)
     }
+
+    pub fn entity(&self, id: EntityId) -> ActionInsertionEntityRef {
+        self.insertions.entity(id)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct ActionInsertionEntityRef<'a> {
+    id: EntityId,
+    insertions: &'a ActionInsertionTable,
+}
+
+impl<'a> ActionInsertionEntityRef<'a> {
+    fn new(id: EntityId, insertions: &'a ActionInsertionTable) -> Self {
+        ActionInsertionEntityRef {
+            id: id,
+            insertions: insertions,
+        }
+    }
+
+    pub fn id(self) -> EntityId {
+        self.id
+    }
+
+{{#each component}}
+    {{#if type}}
+        {{#if copy}}
+    pub fn {{id}}(self) -> Option<{{type}}> {
+        self.insertions.{{id}}(self.id)
+    }
+    pub fn {{id}}_ref(self) -> Option<&'a {{type}}> {
+        self.insertions.{{id}}_ref(self.id)
+    }
+        {{else}}
+    pub fn {{id}}(self) -> Option<&'a {{type}}> {
+        self.insertions.{{id}}(self.id)
+    }
+        {{/if}}
+    {{else}}
+    pub fn contains_{{id}}(self) -> bool {
+        self.insertions.contains_{{id}}(self.id)
+    }
+    {{/if}}
+{{/each}}
 }
 
 pub struct ActionEntityRefMut<'a> {
