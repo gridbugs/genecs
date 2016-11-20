@@ -1063,6 +1063,10 @@ impl<'a> ActionEntityRefMut<'a> {
             action: action,
         }
     }
+
+    pub fn id(&self) -> EntityId {
+        self.id
+    }
 }
 
 pub const NUM_ACTION_PROPERTIES: usize = {{num_action_properties}};
