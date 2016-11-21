@@ -463,6 +463,10 @@ impl EcsCtx {
         EntityRefMut::new(id, self)
     }
 
+    pub fn post_insertion_entity<'a>(&'a self, id: EntityId, insertions: &'a ActionInsertionTable) -> PostInsertionEntityRef<'a> {
+        PostInsertionEntityRef::new(id, self, insertions)
+    }
+
 {{#each query}}
     pub fn {{id}}(&self) -> {{prefix}}Iter {
         let query_ctx = self.query_ctx_mut();
@@ -925,8 +929,8 @@ impl ActionInsertionTable {
     {{/if}}
 {{/each}}
 
-    pub fn entity(&self, id: EntityId) -> ActionInsertionEntityRef {
-        ActionInsertionEntityRef::new(id, self)
+    pub fn entity(&self, id: EntityId) -> InsertionEntityRef {
+        InsertionEntityRef::new(id, self)
     }
 }
 
@@ -1006,20 +1010,20 @@ impl EcsAction {
         ActionEntityRefMut::new(id, self)
     }
 
-    pub fn entity(&self, id: EntityId) -> ActionInsertionEntityRef {
+    pub fn entity(&self, id: EntityId) -> InsertionEntityRef {
         self.insertions.entity(id)
     }
 }
 
 #[derive(Clone, Copy)]
-pub struct ActionInsertionEntityRef<'a> {
+pub struct InsertionEntityRef<'a> {
     id: EntityId,
     insertions: &'a ActionInsertionTable,
 }
 
-impl<'a> ActionInsertionEntityRef<'a> {
+impl<'a> InsertionEntityRef<'a> {
     fn new(id: EntityId, insertions: &'a ActionInsertionTable) -> Self {
-        ActionInsertionEntityRef {
+        InsertionEntityRef {
             id: id,
             insertions: insertions,
         }
@@ -1045,6 +1049,76 @@ impl<'a> ActionInsertionEntityRef<'a> {
         {{/if}}
     {{else}}
     pub fn contains_{{id}}(self) -> bool {
+        self.insertions.contains_{{id}}(self.id)
+    }
+    {{/if}}
+{{/each}}
+}
+
+#[derive(Clone, Copy)]
+pub struct PostInsertionEntityRef<'a> {
+    id : EntityId,
+    ctx: &'a EcsCtx,
+    insertions: &'a ActionInsertionTable,
+}
+
+impl<'a> PostInsertionEntityRef<'a> {
+    fn new(id: EntityId, ctx: &'a EcsCtx, insertions: &'a ActionInsertionTable) -> Self {
+        PostInsertionEntityRef {
+            id: id,
+            ctx: ctx,
+            insertions: insertions,
+        }
+    }
+
+    pub fn id(self) -> EntityId {
+        self.id
+    }
+
+    pub fn to_entity_ref(self) -> EntityRef<'a> {
+        EntityRef::new(self.id, self.ctx)
+    }
+
+{{#each component}}
+    {{#if type}}
+        {{#if copy}}
+    pub fn {{id}}(self) -> Option<{{type}}> {
+        self.current_{{id}}().or_else(|| self.new_{{id}}())
+    }
+    pub fn current_{{id}}(self) -> Option<{{type}}> {
+        self.ctx.{{id}}(self.id)
+    }
+    pub fn new_{{id}}(self) -> Option<{{type}}> {
+        self.insertions.{{id}}(self.id)
+    }
+    pub fn {{id}}_ref(self) -> Option<&'a {{type}}> {
+        self.current_{{id}}_ref().or_else(|| self.new_{{id}}_ref())
+    }
+    pub fn current_{{id}}_ref(self) -> Option<&'a {{type}}> {
+        self.ctx.{{id}}_ref(self.id)
+    }
+    pub fn new_{{id}}_ref(self) -> Option<&'a {{type}}> {
+        self.insertions.{{id}}_ref(self.id)
+    }
+        {{else}}
+    pub fn {{id}}(self) -> Option<&'a {{type}}> {
+        self.current_{{id}}().or_else(|| self.new_{{id}}())
+    }
+    pub fn current_{{id}}(self) -> Option<&'a {{type}}> {
+        self.ctx.{{id}}(self.id)
+    }
+    pub fn new_{{id}}(self) -> Option<&'a {{type}}> {
+        self.insertions.{{id}}(self.id)
+    }
+        {{/if}}
+    {{else}}
+    pub fn contains_{{id}}(self) -> bool {
+        self.current_contains_{{id}}() || self.new_contains_{{id}}()
+    }
+    pub fn current_contains_{{id}}(self) -> bool {
+        self.ctx.contains_{{id}}(self.id)
+    }
+    pub fn new_contains_{{id}}(self) -> bool {
         self.insertions.contains_{{id}}(self.id)
     }
     {{/if}}
