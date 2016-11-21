@@ -1080,8 +1080,9 @@ impl<'a> PostInsertionEntityRef<'a> {
     }
 
 {{#each component}}
-    {{#if type}}
-        {{#if copy}}
+    {{#unless container}}
+        {{#if type}}
+            {{#if copy}}
     pub fn {{id}}(self) -> Option<{{type}}> {
         self.current_{{id}}().or_else(|| self.new_{{id}}())
     }
@@ -1100,7 +1101,7 @@ impl<'a> PostInsertionEntityRef<'a> {
     pub fn new_{{id}}_ref(self) -> Option<&'a {{type}}> {
         self.insertions.{{id}}_ref(self.id)
     }
-        {{else}}
+            {{else}}
     pub fn {{id}}(self) -> Option<&'a {{type}}> {
         self.current_{{id}}().or_else(|| self.new_{{id}}())
     }
@@ -1110,8 +1111,8 @@ impl<'a> PostInsertionEntityRef<'a> {
     pub fn new_{{id}}(self) -> Option<&'a {{type}}> {
         self.insertions.{{id}}(self.id)
     }
-        {{/if}}
-    {{else}}
+            {{/if}}
+        {{else}}
     pub fn contains_{{id}}(self) -> bool {
         self.current_contains_{{id}}() || self.new_contains_{{id}}()
     }
@@ -1121,7 +1122,8 @@ impl<'a> PostInsertionEntityRef<'a> {
     pub fn new_contains_{{id}}(self) -> bool {
         self.insertions.contains_{{id}}(self.id)
     }
-    {{/if}}
+        {{/if}}
+    {{/unless}}
 {{/each}}
 }
 
