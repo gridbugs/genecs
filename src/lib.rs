@@ -228,15 +228,11 @@ impl EcsTable {
     }
                 {{/if}}
                 {{#if UnsafeCell}}
-    pub fn {{id}}_unsafe_get_mut(&self, entity: EntityId) -> Option<&mut {{type}}> {
-        unsafe {
-            self.{{id}}.get(&entity).map(|e| &mut *e.get())
-        }
+    pub fn {{id}}_unsafe_get_mut(&self, entity: EntityId) -> Option<*mut {{type}}> {
+        self.{{id}}.get(&entity).map(|e| e.get())
     }
-    pub fn {{id}}_unsafe_get(&self, entity: EntityId) -> Option<&{{type}}> {
-        unsafe {
-            self.{{id}}.get(&entity).map(|e| &*e.get())
-        }
+    pub fn {{id}}_unsafe_get(&self, entity: EntityId) -> Option<*const {{type}}> {
+        self.{{id}}.get(&entity).map(|e| e.get() as *const {{type}})
     }
                 {{/if}}
 
@@ -373,10 +369,10 @@ impl EcsCtx {
     }
                 {{/if}}
                 {{#if UnsafeCell}}
-    pub fn {{id}}_unsafe_get_mut(&self, entity: EntityId) -> Option<&mut {{type}}> {
+    pub fn {{id}}_unsafe_get_mut(&self, entity: EntityId) -> Option<*mut {{type}}> {
         self.table.{{id}}_unsafe_get_mut(entity)
     }
-    pub fn {{id}}_unsafe_get(&self, entity: EntityId) -> Option<&{{type}}> {
+    pub fn {{id}}_unsafe_get(&self, entity: EntityId) -> Option<*const {{type}}> {
         self.table.{{id}}_unsafe_get(entity)
     }
                 {{/if}}
@@ -663,10 +659,10 @@ impl<'a> EntityRef<'a> {
     }
                 {{/if}}
                 {{#if UnsafeCell}}
-    pub fn {{id}}_unsafe_get_mut(self) -> Option<&'a mut {{type}}> {
+    pub fn {{id}}_unsafe_get_mut(self) -> Option<*mut {{type}}> {
         self.ctx.{{id}}_unsafe_get_mut(self.id)
     }
-    pub fn {{id}}_unsafe_get(self) -> Option<&'a {{type}}> {
+    pub fn {{id}}_unsafe_get(self) -> Option<*const {{type}}> {
         self.ctx.{{id}}_unsafe_get(self.id)
     }
                 {{/if}}
@@ -747,10 +743,10 @@ impl<'a> EntityRefMut<'a> {
     }
                 {{/if}}
                 {{#if UnsafeCell}}
-    pub fn {{id}}_unsafe_get_mut(&self) -> Option<&mut {{type}}> {
+    pub fn {{id}}_unsafe_get_mut(&self) -> Option<*mut {{type}}> {
         self.ctx.{{id}}_unsafe_get_mut(self.id)
     }
-    pub fn {{id}}_unsafe_get(&self) -> Option<&{{type}}> {
+    pub fn {{id}}_unsafe_get(&self) -> Option<*const {{type}}> {
         self.ctx.{{id}}_unsafe_get(self.id)
     }
                 {{/if}}
