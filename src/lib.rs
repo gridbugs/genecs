@@ -17,7 +17,7 @@ use rustc_serialize::json::{self, Json};
 const TEMPLATE: &'static str = r#"// Automatically generated. Do not edit.
 #![allow(unused_imports)]
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, btree_set, HashMap, HashSet};
 use std::cell::{UnsafeCell, RefCell, Ref, RefMut};
 use std::slice;
 use std::usize;
@@ -29,7 +29,61 @@ use {{ this }};
 pub type EntityId = u64;
 
 pub type EntityMap<T> = BTreeMap<EntityId, T>;
-pub type EntitySet = BTreeSet<EntityId>;
+
+pub struct EntitySet {
+    inner: BTreeSet<EntityId>,
+}
+
+impl EntitySet {
+    pub fn new() -> Self {
+        EntitySet {
+            inner: BTreeSet::new(),
+        }
+    }
+
+    pub fn insert(&mut self, entity: EntityId) {
+        self.inner.insert(entity);
+    }
+
+    pub fn remove(&mut self, entity: EntityId) {
+        self.inner.remove(&entity);
+    }
+
+    pub fn contains(&self, entity: EntityId) -> bool {
+        self.inner.contains(&entity)
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    pub fn clear(&mut self) {
+        self.inner.clear()
+    }
+
+    pub fn iter(&self) -> EntitySetIter {
+        EntitySetIter::new(self.inner.iter())
+    }
+}
+
+pub struct EntitySetIter<'a> {
+    iter: btree_set::Iter<'a, EntityId>,
+}
+
+impl<'a> EntitySetIter<'a> {
+    fn new(iter: btree_set::Iter<'a, EntityId>) -> Self {
+        EntitySetIter {
+            iter: iter,
+        }
+    }
+}
+
+impl<'a> Iterator for EntitySetIter<'a> {
+    type Item = EntityId;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|id_ref| *id_ref)
+    }
+}
 
 pub const NUM_COMPONENTS: usize = {{num_components}};
 
@@ -253,19 +307,23 @@ impl EcsTable {
         self.{{id}}.get_mut(&entity)
     }
         {{/if}}
+
+    pub fn remove_{{id}}(&mut self, entity: EntityId) {
+        self.{{id}}.remove(&entity);
+    }
     {{else}}
     pub fn insert_{{id}}(&mut self, entity: EntityId) {
         self.{{id}}.insert(entity);
     }
 
     pub fn contains_{{id}}(&self, entity: EntityId) -> bool {
-        self.{{id}}.contains(&entity)
+        self.{{id}}.contains(entity)
+    }
+    pub fn remove_{{id}}(&mut self, entity: EntityId) {
+        self.{{id}}.remove(entity);
     }
     {{/if}}
 
-    pub fn remove_{{id}}(&mut self, entity: EntityId) {
-        self.{{id}}.remove(&entity);
-    }
 
     pub fn count_{{id}}(&self) -> usize {
         self.{{id}}.len()
@@ -303,7 +361,7 @@ impl EcsTable {
     {{else}}
             component_type::{{id_uppercase}} => {
                 for id in self.{{id}}.iter() {
-                    ids.push(*id);
+                    ids.push(id);
                 }
             },
     {{/if}}
