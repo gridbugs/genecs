@@ -605,6 +605,10 @@ impl EcsCtx {
             self.remove_entity(entity_id);
         }
     }
+
+    pub fn entity_iter<I: Iterator<Item=EntityId>>(&self, iter: I) -> EntityRefIter<I> {
+        EntityRefIter::new(self, iter)
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -1315,6 +1319,27 @@ impl EcsActionProperties {
     {{/if}}
     }
 {{/each}}
+}
+
+pub struct EntityRefIter<'a, I: Iterator<Item=EntityId>> {
+    ctx: &'a EcsCtx,
+    iter: I,
+}
+
+impl<'a, I: Iterator<Item=EntityId>> EntityRefIter<'a, I> {
+    fn new(ctx: &'a EcsCtx, iter: I) -> Self {
+        EntityRefIter {
+            ctx: ctx,
+            iter: iter,
+        }
+    }
+}
+
+impl<'a, I: Iterator<Item=EntityId>> Iterator for EntityRefIter<'a, I> {
+    type Item = EntityRef<'a>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|id| self.ctx.entity(id))
+    }
 }
 "#;
 
