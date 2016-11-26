@@ -64,6 +64,10 @@ impl EntitySet {
     pub fn iter(&self) -> EntitySetIter {
         EntitySetIter::new(self.inner.iter())
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
 }
 
 pub struct EntitySetIter<'a> {
