@@ -970,6 +970,12 @@ impl ActionInsertionTable {
         }
     }
 
+    pub fn clear(&mut self) {
+{{#each component}}
+        self.{{id}}.clear();
+{{/each}}
+    }
+
 {{#each component}}
     {{#if type}}
         {{#if copy}}
@@ -1010,6 +1016,12 @@ impl ActionRemovalTable {
 {{/each}}
         }
     }
+
+    pub fn clear(&mut self) {
+{{#each component}}
+        self.{{id}}.clear();
+{{/each}}
+    }
 }
 
 pub struct EcsAction {
@@ -1019,6 +1031,12 @@ pub struct EcsAction {
     pub removal_types: ComponentTypeSet,
     pub removed_entities: HashSet<EntityId>,
     pub properties: EcsActionProperties,
+}
+
+impl Default for EcsAction {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl EcsAction {
@@ -1031,6 +1049,15 @@ impl EcsAction {
             removed_entities: HashSet::new(),
             properties: EcsActionProperties::new(),
         }
+    }
+
+    pub fn clear(&mut self) {
+        self.insertions.clear();
+        self.insertion_types.clear();
+        self.removals.clear();
+        self.removal_types.clear();
+        self.removed_entities.clear();
+        self.properties.clear();
     }
 
 {{#each component}}
@@ -1055,6 +1082,18 @@ impl EcsAction {
     }
 {{#each action_property}}
     {{#if type}}
+        {{#if copy}}
+    pub fn {{id}}(&self) -> Option<{{type}}> {
+        self.properties.{{id}}()
+    }
+    pub fn {{id}}_ref(&self) -> Option<&{{type}}> {
+        self.properties.{{id}}_ref()
+    }
+        {{else}}
+    pub fn {{id}}(&self) -> Option<&{{type}}> {
+        self.properties.{{id}}()
+    }
+        {{/if}}
     pub fn set_{{id}}(&mut self, value: {{type}}) {
         self.properties.insert_{{id}}(value);
     }
