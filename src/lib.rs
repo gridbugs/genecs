@@ -17,7 +17,7 @@ use rustc_serialize::json::{self, Json};
 const TEMPLATE: &'static str = r#"// Automatically generated. Do not edit.
 #![allow(unused_imports)]
 
-use std::collections::{BTreeMap, BTreeSet, btree_set, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, btree_set, HashMap, hash_map, HashSet, hash_set};
 use std::cell::{UnsafeCell, RefCell, Ref, RefMut};
 use std::slice;
 use std::usize;
@@ -947,6 +947,39 @@ impl QueryCtx {
     }
 }
 
+pub struct ActionInsertionTableValueIter<'a, T:'a + Copy> {
+    iter: hash_map::Iter<'a, EntityId, T>,
+}
+
+impl<'a, T: 'a + Copy> Iterator for ActionInsertionTableValueIter<'a, T> {
+    type Item = (EntityId, T);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|(k, v)| (*k, *v))
+    }
+}
+
+pub struct ActionInsertionTableRefIter<'a, T:'a> {
+    iter: hash_map::Iter<'a, EntityId, T>,
+}
+
+impl<'a, T: 'a> Iterator for ActionInsertionTableRefIter<'a, T> {
+    type Item = (EntityId, &'a T);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|(k, v)| (*k, v))
+    }
+}
+
+pub struct ActionInsertionTableFlagIter<'a> {
+    iter: hash_set::Iter<'a, EntityId>,
+}
+
+impl<'a> Iterator for ActionInsertionTableFlagIter<'a> {
+    type Item = EntityId;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|id| *id)
+    }
+}
+
 pub struct ActionInsertionTable {
 {{#each component}}
     {{#if type}}
@@ -985,14 +1018,23 @@ impl ActionInsertionTable {
     pub fn {{id}}_ref(&self, entity: EntityId) -> Option<&{{type}}> {
         self.{{id}}.get(&entity)
     }
+    pub fn {{id}}_iter(&self) -> ActionInsertionTableValueIter<{{type}}> {
+        ActionInsertionTableValueIter { iter: self.{{id}}.iter() }
+    }
         {{else}}
     pub fn {{id}}(&self, entity: EntityId) -> Option<&{{type}}> {
         self.{{id}}.get(&entity)
+    }
+    pub fn {{id}}_iter(&self) -> ActionInsertionTableRefIter<{{type}}> {
+        ActionInsertionTableRefIter { iter: self.{{id}}.iter() }
     }
         {{/if}}
     {{else}}
     pub fn contains_{{id}}(&self, entity: EntityId) -> bool {
         self.{{id}}.contains(&entity)
+    }
+    pub fn {{id}}_iter(&self) -> ActionInsertionTableFlagIter {
+        ActionInsertionTableFlagIter { iter: self.{{id}}.iter() }
     }
     {{/if}}
 {{/each}}
