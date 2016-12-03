@@ -1430,6 +1430,7 @@ impl EcsActionProperties {
     {{#if type}}
     pub fn insert_{{id}}(&mut self, value: {{type}}) {
         self.{{id}} = Some(value);
+        self.property_types.insert_{{id}}();
     }
         {{#if copy}}
     pub fn {{id}}(&self) -> Option<{{type}}> {
