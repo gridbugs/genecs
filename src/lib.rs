@@ -252,7 +252,10 @@ impl EcsTable {
     {{#if type}}
         {{#if container}}
     pub fn insert_{{id}}(&mut self, entity: EntityId, value: {{type}}) {
-        self.{{id}}.insert(entity, {{container}}::new(value));
+        self.bare_insert_{{id}}(entity, {{container}}::new(value));
+    }
+    pub fn bare_insert_{{id}}(&mut self, entity: EntityId, value: {{container}}<{{type}}>) {
+        self.{{id}}.insert(entity, value);
     }
         {{else}}
     pub fn insert_{{id}}(&mut self, entity: EntityId, value: {{type}}) {
@@ -306,7 +309,10 @@ impl EcsTable {
     pub fn {{id}}_mut(&mut self, entity: EntityId) -> Option<&mut {{container}}<{{type}}>> {
         self.{{id}}.get_mut(&entity)
     }
-    pub fn remove_{{id}}(&mut self, entity: EntityId) -> Option<{{container}}<{{type}}>> {
+    pub fn remove_{{id}}(&mut self, entity: EntityId) -> Option<{{type}}> {
+        self.bare_remove_{{id}}(entity).map(|c| c.into_inner())
+    }
+    pub fn bare_remove_{{id}}(&mut self, entity: EntityId) -> Option<{{container}}<{{type}}>> {
         self.{{id}}.remove(&entity)
     }
         {{else}}
@@ -400,6 +406,17 @@ impl EcsCtx {
 
 {{#each component}}
     {{#if type}}
+
+        {{#if container}}
+    pub fn bare_insert_{{id}}(&mut self, entity: EntityId, value: {{container}}<{{type}}>) {
+        self.table.bare_insert_{{id}}(entity, value);
+        self.tracker.entry(entity).or_insert_with(ComponentTypeSet::new).insert_{{id}}();
+            {{#if queried}}
+        self.set_dirty_insert_{{id}}();
+            {{/if}}
+    }
+        {{/if}}
+
     pub fn insert_{{id}}(&mut self, entity: EntityId, value: {{type}}) {
         self.table.insert_{{id}}(entity, value);
         self.tracker.entry(entity).or_insert_with(ComponentTypeSet::new).insert_{{id}}();
@@ -470,13 +487,29 @@ impl EcsCtx {
     }
     {{/if}}
 
-    pub fn remove_{{id}}(&mut self, entity: EntityId)
     {{#if type}}
         {{#if container}}
-            -> Option<{{container}}<{{type}}>>
-        {{else}}
-            -> Option<{{type}}>
+    pub fn bare_remove_{{id}}(&mut self, entity: EntityId) -> Option<{{container}}<{{type}}>> {
+        let ret = self.table.bare_remove_{{id}}(entity);
+        let empty = self.tracker.get_mut(&entity).map(|set| {
+            set.remove_{{id}}();
+            set.is_empty()
+        });
+        if let Some(true) = empty {
+            self.tracker.remove(&entity);
+        }
+        {{#if queried}}
+        self.set_dirty_remove_{{id}}();
         {{/if}}
+
+        ret
+    }
+        {{/if}}
+    {{/if}}
+
+    pub fn remove_{{id}}(&mut self, entity: EntityId)
+    {{#if type}}
+        -> Option<{{type}}>
     {{/if}}
     {
     {{#if type}}
@@ -495,6 +528,52 @@ impl EcsCtx {
         {{/if}}
     {{#if type}}
         ret
+    {{/if}}
+    }
+
+    pub fn swap_{{id}}(&mut self, a: EntityId, b: EntityId) {
+    {{#if type}}
+        {{#if container}}
+
+        let a_component = self.bare_remove_{{id}}(a);
+        let b_component = self.bare_remove_{{id}}(b);
+
+        if let Some(a_component) = a_component {
+            self.bare_insert_{{id}}(b, a_component);
+        }
+
+        if let Some(b_component) = b_component {
+            self.bare_insert_{{id}}(a, b_component);
+        }
+
+        {{else}}
+
+        let a_component = self.remove_{{id}}(a);
+        let b_component = self.remove_{{id}}(b);
+
+        if let Some(a_component) = a_component {
+            self.insert_{{id}}(b, a_component);
+        }
+
+        if let Some(b_component) = b_component {
+            self.insert_{{id}}(a, b_component);
+        }
+
+        {{/if}}
+    {{else}}
+        let a_contains = self.contains_{{id}}(a);
+
+        if self.contains_{{id}}(b) {
+            self.insert_{{id}}(a);
+        } else {
+            self.remove_{{id}}(a);
+        }
+
+        if a_contains {
+            self.insert_{{id}}(b);
+        } else {
+            self.remove_{{id}}(b);
+        }
     {{/if}}
     }
 
@@ -800,13 +879,18 @@ impl<'a> EntityRefMut<'a> {
     pub fn contains_{{id}}(&self) -> bool {
         self.ctx.contains_{{id}}(self.id)
     }
-    pub fn remove_{{id}}(&mut self)
+
     {{#if type}}
         {{#if container}}
-            -> Option<{{container}}<{{type}}>>
-        {{else}}
-            -> Option<{{type}}>
+    pub fn bare_remove_{{id}}(&mut self) -> Option<{{container}}<{{type}}>> {
+        self.ctx.bare_remove_{{id}}(self.id)
+    }
         {{/if}}
+    {{/if}}
+
+    pub fn remove_{{id}}(&mut self)
+    {{#if type}}
+        -> Option<{{type}}>
     {{/if}}
     {
         self.ctx.remove_{{id}}(self.id)
