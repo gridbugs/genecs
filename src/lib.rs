@@ -306,15 +306,17 @@ impl EcsTable {
     pub fn {{id}}_mut(&mut self, entity: EntityId) -> Option<&mut {{container}}<{{type}}>> {
         self.{{id}}.get_mut(&entity)
     }
+    pub fn remove_{{id}}(&mut self, entity: EntityId) -> Option<{{container}}<{{type}}>> {
+        self.{{id}}.remove(&entity)
+    }
         {{else}}
     pub fn {{id}}_mut(&mut self, entity: EntityId) -> Option<&mut {{type}}> {
         self.{{id}}.get_mut(&entity)
     }
-        {{/if}}
-
-    pub fn remove_{{id}}(&mut self, entity: EntityId) {
-        self.{{id}}.remove(&entity);
+    pub fn remove_{{id}}(&mut self, entity: EntityId) -> Option<{{type}}> {
+        self.{{id}}.remove(&entity)
     }
+        {{/if}}
     {{else}}
     pub fn insert_{{id}}(&mut self, entity: EntityId) {
         self.{{id}}.insert(entity);
@@ -341,9 +343,9 @@ impl EcsTable {
     pub fn remove_component(&mut self, entity: EntityId, component_type: ComponentType) {
         match component_type {
 {{#each component}}
-            component_type::{{id_uppercase}} => self.remove_{{id}}(entity),
+            component_type::{{id_uppercase}} => { self.remove_{{id}}(entity); }
 {{/each}}
-            _ => panic!("Invalid component type: {}", component_type),
+            _ => { panic!("Invalid component type: {}", component_type); }
         }
     }
 
@@ -468,7 +470,18 @@ impl EcsCtx {
     }
     {{/if}}
 
-    pub fn remove_{{id}}(&mut self, entity: EntityId) {
+    pub fn remove_{{id}}(&mut self, entity: EntityId)
+    {{#if type}}
+        {{#if container}}
+            -> Option<{{container}}<{{type}}>>
+        {{else}}
+            -> Option<{{type}}>
+        {{/if}}
+    {{/if}}
+    {
+    {{#if type}}
+        let ret =
+    {{/if}}
         self.table.remove_{{id}}(entity);
         let empty = self.tracker.get_mut(&entity).map(|set| {
             set.remove_{{id}}();
@@ -480,6 +493,9 @@ impl EcsCtx {
         {{#if queried}}
         self.set_dirty_remove_{{id}}();
         {{/if}}
+    {{#if type}}
+        ret
+    {{/if}}
     }
 
     {{#if queried}}
@@ -495,9 +511,9 @@ impl EcsCtx {
     pub fn remove_component(&mut self, entity: EntityId, component_type: ComponentType) {
         match component_type {
 {{#each component}}
-            component_type::{{id_uppercase}} => self.remove_{{id}}(entity),
+            component_type::{{id_uppercase}} => { self.remove_{{id}}(entity); }
 {{/each}}
-            _ => panic!("Invalid component type: {}", component_type),
+            _ => { panic!("Invalid component type: {}", component_type); }
         }
     }
 
@@ -784,7 +800,15 @@ impl<'a> EntityRefMut<'a> {
     pub fn contains_{{id}}(&self) -> bool {
         self.ctx.contains_{{id}}(self.id)
     }
-    pub fn remove_{{id}}(&mut self) {
+    pub fn remove_{{id}}(&mut self)
+    {{#if type}}
+        {{#if container}}
+            -> Option<{{container}}<{{type}}>>
+        {{else}}
+            -> Option<{{type}}>
+        {{/if}}
+    {{/if}}
+    {
         self.ctx.remove_{{id}}(self.id)
     }
     {{#if type}}
