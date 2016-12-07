@@ -17,10 +17,11 @@ use rustc_serialize::json::{self, Json};
 const TEMPLATE: &'static str = r#"// Automatically generated. Do not edit.
 #![allow(unused_imports)]
 
-use std::collections::{BTreeMap, BTreeSet, btree_set, HashMap, hash_map, HashSet, hash_set};
+use std::collections::{BTreeMap, btree_map, BTreeSet, btree_set, HashMap, hash_map, HashSet, hash_set};
 use std::cell::{UnsafeCell, RefCell, Ref, RefMut};
 use std::slice;
 use std::usize;
+use std::vec;
 
 {{#each imports}}
 use {{ this }};
@@ -28,7 +29,120 @@ use {{ this }};
 
 pub type EntityId = u64;
 
-pub type EntityMap<T> = BTreeMap<EntityId, T>;
+pub struct EntityMap<T> {
+    inner: BTreeMap<EntityId, T>,
+}
+
+impl<T> EntityMap<T> {
+    pub fn new() -> Self {
+        EntityMap {
+            inner: BTreeMap::new(),
+        }
+    }
+
+    pub fn insert(&mut self, entity: EntityId, value: T) {
+        self.inner.insert(entity, value);
+    }
+
+    pub fn get(&self, entity: EntityId) -> Option<&T> {
+        self.inner.get(&entity)
+    }
+
+    pub fn get_mut(&mut self, entity: EntityId) -> Option<&mut T> {
+        self.inner.get_mut(&entity)
+    }
+
+    pub fn contains_key(&self, entity: EntityId) -> bool {
+        self.inner.contains_key(&entity)
+    }
+
+    pub fn remove(&mut self, entity: EntityId) -> Option<T> {
+        self.inner.remove(&entity)
+    }
+
+    pub fn clear(&mut self) {
+        self.inner.clear();
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    pub fn entry(&mut self, entity: EntityId) -> btree_map::Entry<EntityId, T> {
+        self.inner.entry(entity)
+    }
+
+    pub fn iter(&self) -> EntityMapIter<T> {
+        EntityMapIter::new(self.inner.iter())
+    }
+
+    pub fn keys(&self) -> EntityMapKeys<T> {
+        EntityMapKeys::new(self.inner.keys())
+    }
+}
+
+impl<T: Copy> EntityMap<T> {
+    pub fn copy_iter(&self) -> EntityMapCopyIter<T> {
+        EntityMapCopyIter::new(self.inner.iter())
+    }
+}
+
+pub struct EntityMapKeys<'a, T: 'a> {
+    keys: btree_map::Keys<'a, EntityId, T>,
+}
+
+impl<'a, T: 'a> EntityMapKeys<'a, T> {
+    fn new(keys: btree_map::Keys<'a, EntityId, T>) -> Self {
+        EntityMapKeys {
+            keys: keys,
+        }
+    }
+}
+
+impl<'a, T: 'a> Iterator for EntityMapKeys<'a, T> {
+    type Item = EntityId;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.keys.next().map(|id_ref| *id_ref)
+    }
+}
+
+pub struct EntityMapIter<'a, T: 'a> {
+    iter: btree_map::Iter<'a, EntityId, T>,
+}
+
+impl<'a, T: 'a> EntityMapIter<'a, T> {
+    fn new(iter: btree_map::Iter<'a, EntityId, T>) -> Self {
+        EntityMapIter {
+            iter: iter,
+        }
+    }
+}
+
+impl<'a, T: 'a> Iterator for EntityMapIter<'a, T> {
+    type Item = (EntityId, &'a T);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|(id_ref, v)| (*id_ref, v))
+    }
+}
+
+pub struct EntityMapCopyIter<'a, T: 'a + Copy> {
+    iter: btree_map::Iter<'a, EntityId, T>,
+}
+
+impl<'a, T: 'a + Copy> EntityMapCopyIter<'a, T> {
+    fn new(iter: btree_map::Iter<'a, EntityId, T>) -> Self {
+        EntityMapCopyIter {
+            iter: iter,
+        }
+    }
+}
+
+impl<'a, T: 'a + Copy> Iterator for EntityMapCopyIter<'a, T> {
+    type Item = (EntityId, T);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|(id_ref, v)| (*id_ref, *v))
+    }
+}
 
 pub struct EntitySet {
     inner: BTreeSet<EntityId>,
@@ -83,6 +197,188 @@ impl<'a> EntitySetIter<'a> {
 }
 
 impl<'a> Iterator for EntitySetIter<'a> {
+    type Item = EntityId;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|id_ref| *id_ref)
+    }
+}
+
+pub struct EntityHashMap<T> {
+    inner: HashMap<EntityId, T>,
+}
+
+impl<T> EntityHashMap<T> {
+    pub fn new() -> Self {
+        EntityHashMap {
+            inner: HashMap::new(),
+        }
+    }
+
+    pub fn insert(&mut self, entity: EntityId, value: T) {
+        self.inner.insert(entity, value);
+    }
+
+    pub fn get(&self, entity: EntityId) -> Option<&T> {
+        self.inner.get(&entity)
+    }
+
+    pub fn get_mut(&mut self, entity: EntityId) -> Option<&mut T> {
+        self.inner.get_mut(&entity)
+    }
+
+    pub fn contains_key(&self, entity: EntityId) -> bool {
+        self.inner.contains_key(&entity)
+    }
+
+    pub fn remove(&mut self, entity: EntityId) -> Option<T> {
+        self.inner.remove(&entity)
+    }
+
+    pub fn clear(&mut self) {
+        self.inner.clear();
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    pub fn entry(&mut self, entity: EntityId) -> hash_map::Entry<EntityId, T> {
+        self.inner.entry(entity)
+    }
+
+    pub fn iter(&self) -> EntityHashMapIter<T> {
+        EntityHashMapIter::new(self.inner.iter())
+    }
+
+    pub fn keys(&self) -> EntityHashMapKeys<T> {
+        EntityHashMapKeys::new(self.inner.keys())
+    }
+
+    pub fn drain(&mut self) -> hash_map::Drain<EntityId, T> {
+        self.inner.drain()
+    }
+}
+
+impl<T: Copy> EntityHashMap<T> {
+    pub fn copy_iter(&self) -> EntityHashMapCopyIter<T> {
+        EntityHashMapCopyIter::new(self.inner.iter())
+    }
+}
+
+pub struct EntityHashMapKeys<'a, T: 'a> {
+    keys: hash_map::Keys<'a, EntityId, T>,
+}
+
+impl<'a, T: 'a> EntityHashMapKeys<'a, T> {
+    fn new(keys: hash_map::Keys<'a, EntityId, T>) -> Self {
+        EntityHashMapKeys {
+            keys: keys,
+        }
+    }
+}
+
+impl<'a, T: 'a> Iterator for EntityHashMapKeys<'a, T> {
+    type Item = EntityId;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.keys.next().map(|id_ref| *id_ref)
+    }
+}
+
+pub struct EntityHashMapCopyIter<'a, T: 'a + Copy> {
+    iter: hash_map::Iter<'a, EntityId, T>,
+}
+
+impl<'a, T: 'a + Copy> EntityHashMapCopyIter<'a, T> {
+    fn new(iter: hash_map::Iter<'a, EntityId, T>) -> Self {
+        EntityHashMapCopyIter {
+            iter: iter,
+        }
+    }
+}
+
+impl<'a, T: 'a + Copy> Iterator for EntityHashMapCopyIter<'a, T> {
+    type Item = (EntityId, T);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|(id_ref, v)| (*id_ref, *v))
+    }
+}
+
+pub struct EntityHashMapIter<'a, T: 'a> {
+    iter: hash_map::Iter<'a, EntityId, T>,
+}
+
+impl<'a, T: 'a> EntityHashMapIter<'a, T> {
+    fn new(iter: hash_map::Iter<'a, EntityId, T>) -> Self {
+        EntityHashMapIter {
+            iter: iter,
+        }
+    }
+}
+
+impl<'a, T: 'a> Iterator for EntityHashMapIter<'a, T> {
+    type Item = (EntityId, &'a T);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|(id_ref, v)| (*id_ref, v))
+    }
+}
+
+pub struct EntityHashSet {
+    inner: HashSet<EntityId>,
+}
+
+impl EntityHashSet {
+    pub fn new() -> Self {
+        EntityHashSet {
+            inner: HashSet::new(),
+        }
+    }
+
+    pub fn insert(&mut self, entity: EntityId) {
+        self.inner.insert(entity);
+    }
+
+    pub fn remove(&mut self, entity: EntityId) -> bool {
+        self.inner.remove(&entity)
+    }
+
+    pub fn contains(&self, entity: EntityId) -> bool {
+        self.inner.contains(&entity)
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    pub fn clear(&mut self) {
+        self.inner.clear()
+    }
+
+    pub fn drain(&mut self) -> hash_set::Drain<EntityId> {
+        self.inner.drain()
+    }
+
+    pub fn iter(&self) -> EntityHashSetIter {
+        EntityHashSetIter::new(self.inner.iter())
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+}
+
+pub struct EntityHashSetIter<'a> {
+    iter: hash_set::Iter<'a, EntityId>,
+}
+
+impl<'a> EntityHashSetIter<'a> {
+    fn new(iter: hash_set::Iter<'a, EntityId>) -> Self {
+        EntityHashSetIter {
+            iter: iter,
+        }
+    }
+}
+
+impl<'a> Iterator for EntityHashSetIter<'a> {
     type Item = EntityId;
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next().map(|id_ref| *id_ref)
@@ -264,42 +560,42 @@ impl EcsTable {
         {{/if}}
 
     pub fn contains_{{id}}(&self, entity: EntityId) -> bool {
-        self.{{id}}.contains_key(&entity)
+        self.{{id}}.contains_key(entity)
     }
 
         {{#if copy}}
     pub fn {{id}}(&self, entity: EntityId) -> Option<{{type}}> {
-        self.{{id}}.get(&entity).map(|r| *r)
+        self.{{id}}.get(entity).map(|r| *r)
     }
     pub fn {{id}}_ref(&self, entity: EntityId) -> Option<&{{type}}> {
-        self.{{id}}.get(&entity)
+        self.{{id}}.get(entity)
     }
         {{else}}
             {{#if container}}
 
     pub fn {{id}}(&self, entity: EntityId) -> Option<&{{container}}<{{type}}>> {
-        self.{{id}}.get(&entity)
+        self.{{id}}.get(entity)
     }
                 {{#if RefCell}}
     pub fn {{id}}_borrow(&self, entity: EntityId) -> Option<Ref<{{type}}>> {
-        self.{{id}}.get(&entity).map(|e| e.borrow())
+        self.{{id}}.get(entity).map(|e| e.borrow())
     }
     pub fn {{id}}_borrow_mut(&self, entity: EntityId) -> Option<RefMut<{{type}}>> {
-        self.{{id}}.get(&entity).map(|e| e.borrow_mut())
+        self.{{id}}.get(entity).map(|e| e.borrow_mut())
     }
                 {{/if}}
                 {{#if UnsafeCell}}
     pub fn {{id}}_unsafe_get_mut(&self, entity: EntityId) -> Option<*mut {{type}}> {
-        self.{{id}}.get(&entity).map(|e| e.get())
+        self.{{id}}.get(entity).map(|e| e.get())
     }
     pub fn {{id}}_unsafe_get(&self, entity: EntityId) -> Option<*const {{type}}> {
-        self.{{id}}.get(&entity).map(|e| e.get() as *const {{type}})
+        self.{{id}}.get(entity).map(|e| e.get() as *const {{type}})
     }
                 {{/if}}
 
             {{else}}
     pub fn {{id}}(&self, entity: EntityId) -> Option<&{{type}}> {
-        self.{{id}}.get(&entity)
+        self.{{id}}.get(entity)
     }
             {{/if}}
         {{/if}}
@@ -307,20 +603,20 @@ impl EcsTable {
 
         {{#if container}}
     pub fn {{id}}_mut(&mut self, entity: EntityId) -> Option<&mut {{container}}<{{type}}>> {
-        self.{{id}}.get_mut(&entity)
+        self.{{id}}.get_mut(entity)
     }
     pub fn remove_{{id}}(&mut self, entity: EntityId) -> Option<{{type}}> {
         self.bare_remove_{{id}}(entity).map(|c| c.into_inner())
     }
     pub fn bare_remove_{{id}}(&mut self, entity: EntityId) -> Option<{{container}}<{{type}}>> {
-        self.{{id}}.remove(&entity)
+        self.{{id}}.remove(entity)
     }
         {{else}}
     pub fn {{id}}_mut(&mut self, entity: EntityId) -> Option<&mut {{type}}> {
-        self.{{id}}.get_mut(&entity)
+        self.{{id}}.get_mut(entity)
     }
     pub fn remove_{{id}}(&mut self, entity: EntityId) -> Option<{{type}}> {
-        self.{{id}}.remove(&entity)
+        self.{{id}}.remove(entity)
     }
         {{/if}}
     {{else}}
@@ -367,7 +663,7 @@ impl EcsTable {
     {{#if type}}
             component_type::{{id_uppercase}} => {
                 for id in self.{{id}}.keys() {
-                    ids.push(*id);
+                    ids.push(id);
                 }
             },
     {{else}}
@@ -491,12 +787,12 @@ impl EcsCtx {
         {{#if container}}
     pub fn bare_remove_{{id}}(&mut self, entity: EntityId) -> Option<{{container}}<{{type}}>> {
         let ret = self.table.bare_remove_{{id}}(entity);
-        let empty = self.tracker.get_mut(&entity).map(|set| {
+        let empty = self.tracker.get_mut(entity).map(|set| {
             set.remove_{{id}}();
             set.is_empty()
         });
         if let Some(true) = empty {
-            self.tracker.remove(&entity);
+            self.tracker.remove(entity);
         }
         {{#if queried}}
         self.set_dirty_remove_{{id}}();
@@ -515,12 +811,12 @@ impl EcsCtx {
     {{/if}}
     {
         let ret = self.table.remove_{{id}}(entity);
-        let empty = self.tracker.get_mut(&entity).map(|set| {
+        let empty = self.tracker.get_mut(entity).map(|set| {
             set.remove_{{id}}();
             set.is_empty()
         });
         if let Some(true) = empty {
-            self.tracker.remove(&entity);
+            self.tracker.remove(entity);
         }
         {{#if queried}}
         self.set_dirty_remove_{{id}}();
@@ -619,7 +915,7 @@ impl EcsCtx {
     }
 
     pub fn remove_entity(&mut self, entity: EntityId) {
-        if let Some(set) = self.tracker.remove(&entity) {
+        if let Some(set) = self.tracker.remove(entity) {
             self.table.remove_components(entity, set);
         }
     }
@@ -632,8 +928,8 @@ impl EcsCtx {
         EntityRefMut::new(id, self)
     }
 
-    pub fn post_insertion_entity<'a>(&'a self, id: EntityId, insertions: &'a ActionInsertionTable) -> PostInsertionEntityRef<'a> {
-        PostInsertionEntityRef::new(id, self, insertions)
+    pub fn post_action_entity<'a>(&'a self, id: EntityId, action: &'a EcsAction) -> PostActionEntityRef<'a> {
+        PostActionEntityRef::new(id, self, action)
     }
 
 {{#each query}}
@@ -664,9 +960,9 @@ impl EcsCtx {
             {{#each other_components}}
                         let {{id}} = if let Some(component) =
                 {{#if copy}}
-                            self.table.{{id}}_ref(*id)
+                            self.table.{{id}}_ref(id)
                 {{else}}
-                            self.table.{{id}}(*id)
+                            self.table.{{id}}(id)
                 {{/if}}
                         {
                             component as *const {{type}}
@@ -675,7 +971,7 @@ impl EcsCtx {
                         };
             {{/each}}
                         let result = {{../prefix}}InnerResult {
-                            id: *id,
+                            id: id,
                             {{id}}: {{id}},
             {{#each other_components}}
                             {{id}}: {{id}},
@@ -688,9 +984,9 @@ impl EcsCtx {
             {{#each other_components}}
                         let {{id}} = if let Some(component) =
                 {{#if copy}}
-                            self.table.{{id}}_ref(*id)
+                            self.table.{{id}}_ref(id)
                 {{else}}
-                            self.table.{{id}}(*id)
+                            self.table.{{id}}(id)
                 {{/if}}
                         {
                             component as *const {{type}}
@@ -699,7 +995,7 @@ impl EcsCtx {
                         };
             {{/each}}
                         let result = {{../prefix}}InnerResult {
-                            id: *id,
+                            id: id,
             {{#each other_components}}
                             {{id}}: {{id}},
             {{/each}}
@@ -722,63 +1018,45 @@ impl EcsCtx {
 {{/each}}
 
     pub fn commit(&mut self, action: &mut EcsAction) {
-        self.commit_insertions(&mut action.insertions,
-                               &mut action.insertion_types);
-        self.commit_removals(&mut action.removals,
-                             &mut action.removal_types);
-        self.commit_removed_entities(&mut action.removed_entities);
 
+{{#each component}}
+
+        if action.changed_components.contains_{{id}}() {
+
+    {{#if type}}
+
+            for (id, component) in action.{{id}}.insertions.drain() {
+                self.insert_{{id}}(id, component);
+            }
+
+    {{else}}
+
+            for id in action.{{id}}.insertions.drain() {
+                self.insert_{{id}}(id);
+            }
+
+    {{/if}}
+
+            for id in action.{{id}}.removals.drain() {
+                self.remove_{{id}}(id);
+            }
+
+            for (a, b) in action.{{id}}.swaps.apply.drain(..) {
+                self.swap_{{id}}(a, b);
+            }
+            action.{{id}}.swaps.lookup.clear();
+
+            for mv in action.{{id}}.moves.apply.drain(..) {
+                self.move_{{id}}(mv.source, mv.destination);
+            }
+            action.{{id}}.moves.lookup_to.clear();
+            action.{{id}}.moves.lookup_from.clear();
+        }
+{{/each}}
+
+        action.changed_components.clear();
         action.properties.clear();
     }
-
-    fn commit_insertions(&mut self,
-                         insertions: &mut ActionInsertionTable,
-                         insertion_types: &mut ComponentTypeSet) {
-        for component_type in insertion_types.iter() {
-            match component_type {
-{{#each component}}
-                component_type::{{id_uppercase}} => {
-    {{#if type}}
-                    for (entity_id, value) in insertions.{{id}}.drain() {
-                        self.insert_{{id}}(entity_id, value);
-                    }
-    {{else}}
-                    for entity_id in insertions.{{id}}.drain() {
-                        self.insert_{{id}}(entity_id);
-                    }
-    {{/if}}
-                }
-{{/each}}
-                _ => panic!("Invalid component type: {}", component_type),
-            }
-        }
-        insertion_types.clear();
-    }
-
-    fn commit_removals(&mut self,
-                       removals: &mut ActionRemovalTable,
-                       removal_types: &mut ComponentTypeSet) {
-        for component_type in removal_types.iter() {
-            match component_type {
-{{#each component}}
-                component_type::{{id_uppercase}} => {
-                    for entity_id in removals.{{id}}.drain() {
-                        self.remove_{{id}}(entity_id);
-                    }
-                }
-{{/each}}
-                _ => panic!("Invalid component type: {}", component_type),
-            }
-        }
-        removal_types.clear();
-    }
-
-    fn commit_removed_entities(&mut self, removed_entities: &mut HashSet<EntityId>) {
-        for entity_id in removed_entities.drain() {
-            self.remove_entity(entity_id);
-        }
-    }
-
     pub fn entity_iter<I: Iterator<Item=EntityId>>(&self, iter: I) -> EntityRefIter<I> {
         EntityRefIter::new(self, iter)
     }
@@ -803,7 +1081,7 @@ impl<'a> EntityRef<'a> {
     }
 
     pub fn is_empty(self) -> bool {
-        if let Some(set) = self.ctx.tracker.get(&self.id) {
+        if let Some(set) = self.ctx.tracker.get(self.id) {
             set.is_empty()
         } else {
             true
@@ -881,7 +1159,7 @@ impl<'a> EntityRefMut<'a> {
     }
 
     pub fn is_empty(&self) -> bool {
-        if let Some(set) = self.ctx.tracker.get(&self.id) {
+        if let Some(set) = self.ctx.tracker.get(self.id) {
             set.is_empty()
         } else {
             true
@@ -1073,132 +1351,445 @@ impl QueryCtx {
     }
 }
 
-pub struct ActionInsertionTableValueIter<'a, T:'a + Copy> {
-    iter: hash_map::Iter<'a, EntityId, T>,
+struct FlagMoveIter<'a> {
+    components: &'a EntitySet,
+    iter: btree_map::Iter<'a, EntityId, EntityId>,
 }
 
-impl<'a, T: 'a + Copy> Iterator for ActionInsertionTableValueIter<'a, T> {
-    type Item = (EntityId, T);
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(|(k, v)| (*k, *v))
+impl<'a> FlagMoveIter<'a> {
+    fn new(components: &'a EntitySet, iter: btree_map::Iter<'a, EntityId, EntityId>) -> Self {
+        FlagMoveIter {
+            components: components,
+            iter: iter,
+        }
     }
 }
 
-pub struct ActionInsertionTableRefIter<'a, T:'a> {
-    iter: hash_map::Iter<'a, EntityId, T>,
-}
+struct FlagMovePositiveIter<'a>(FlagMoveIter<'a>);
 
-impl<'a, T: 'a> Iterator for ActionInsertionTableRefIter<'a, T> {
-    type Item = (EntityId, &'a T);
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(|(k, v)| (*k, v))
+impl<'a> FlagMovePositiveIter<'a> {
+    fn new(components: &'a EntitySet, iter: btree_map::Iter<'a, EntityId, EntityId>) -> Self {
+        FlagMovePositiveIter(FlagMoveIter::new(components, iter))
     }
 }
 
-pub struct ActionInsertionTableFlagIter<'a> {
-    iter: hash_set::Iter<'a, EntityId>,
-}
-
-impl<'a> Iterator for ActionInsertionTableFlagIter<'a> {
+impl<'a> Iterator for FlagMovePositiveIter<'a> {
     type Item = EntityId;
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(|id| *id)
+        while let Some((dest, src)) = self.0.iter.next() {
+            // for each flag being moved into dest
+            if self.0.components.contains(*src) {
+                // if the flag was set in the source
+                if !self.0.components.contains(*dest) {
+                    // if the flag wasn't set in the destination
+                    return Some(*dest);
+                }
+            }
+        }
+        None
     }
 }
 
-pub struct ActionInsertionTable {
-{{#each component}}
-    {{#if type}}
-    pub {{id}}: HashMap<EntityId, {{type}}>,
-    {{else}}
-    pub {{id}}: HashSet<EntityId>,
-    {{/if}}
-{{/each}}
+struct FlagMoveNegativeIter<'a>(FlagMoveIter<'a>);
+
+impl<'a> FlagMoveNegativeIter<'a> {
+    fn new(components: &'a EntitySet, iter: btree_map::Iter<'a, EntityId, EntityId>) -> Self {
+        FlagMoveNegativeIter(FlagMoveIter::new(components, iter))
+    }
 }
 
-impl ActionInsertionTable {
+impl<'a> Iterator for FlagMoveNegativeIter<'a> {
+    type Item = EntityId;
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some((src, _)) = self.0.iter.next() {
+            // for each flag being moved out of src
+            if self.0.components.contains(*src) {
+                // if the flag was originally set
+                return Some(*src);
+            }
+        }
+        None
+    }
+}
+
+struct FlagSwapNegativeIter<'a>(FlagMoveIter<'a>);
+
+impl<'a> FlagSwapNegativeIter<'a> {
+    fn new(components: &'a EntitySet, iter: btree_map::Iter<'a, EntityId, EntityId>) -> Self {
+        FlagSwapNegativeIter(FlagMoveIter::new(components, iter))
+    }
+}
+
+impl<'a> Iterator for FlagSwapNegativeIter<'a> {
+    type Item = EntityId;
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some((src, dest)) = self.0.iter.next() {
+            // for each flag being moved out of src
+            if self.0.components.contains(*src) {
+                // if the flag was originally set
+                if !self.0.components.contains(*dest) {
+                    // if the flag being swapped with is clear
+                    return Some(*src);
+                }
+            }
+        }
+        None
+    }
+}
+
+struct TypedMoveIter<'a, T: 'a> {
+    components: &'a EntityMap<T>,
+    iter: btree_map::Iter<'a, EntityId, EntityId>,
+}
+
+impl<'a, T: 'a> TypedMoveIter<'a, T> {
+    fn new(components: &'a EntityMap<T>, iter: btree_map::Iter<'a, EntityId, EntityId>) -> Self {
+        TypedMoveIter {
+            components: components,
+            iter: iter,
+        }
+    }
+}
+
+struct TypedMovePositiveIter<'a, T: 'a>(TypedMoveIter<'a, T>);
+
+impl<'a, T: 'a> TypedMovePositiveIter<'a, T> {
+    fn new(components: &'a EntityMap<T>, iter: btree_map::Iter<'a, EntityId, EntityId>) -> Self {
+        TypedMovePositiveIter(TypedMoveIter::new(components, iter))
+    }
+}
+
+impl<'a, T: 'a> Iterator for TypedMovePositiveIter<'a, T> {
+    type Item = (EntityId, &'a T);
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some((dest, src)) = self.0.iter.next() {
+            // for all components being moved in
+            if let Some(value) = self.0.components.get(*src) {
+                // if that component has a value
+                return Some((*dest, value));
+            }
+        }
+        None
+    }
+}
+
+struct TypedMoveNegativeIter<'a, T: 'a>(TypedMoveIter<'a, T>);
+
+impl<'a, T: 'a> TypedMoveNegativeIter<'a, T> {
+    fn new(components: &'a EntityMap<T>, iter: btree_map::Iter<'a, EntityId, EntityId>) -> Self {
+        TypedMoveNegativeIter(TypedMoveIter::new(components, iter))
+    }
+}
+
+impl<'a, T: 'a> Iterator for TypedMoveNegativeIter<'a, T> {
+    type Item = EntityId;
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some((src, _)) = self.0.iter.next() {
+            // for all components being moved out
+            if self.0.components.contains_key(*src) {
+                // if the component had a value to begin with
+                return Some(*src);
+            }
+        }
+        None
+    }
+}
+
+// There is no positive swap iterator, as if a value is moving into
+// an entity, it doesn't matter if there was already a value of that
+// component present. When moving a component out of an entity, that
+// component will definitely not be present after the move. With a
+// swap, the presence of a value dependends on the value of the component
+// in the entity being swapped with.
+struct TypedSwapNegativeIter<'a, T: 'a>(TypedMoveIter<'a, T>);
+
+impl<'a, T: 'a> TypedSwapNegativeIter<'a, T> {
+    fn new(components: &'a EntityMap<T>, iter: btree_map::Iter<'a, EntityId, EntityId>) -> Self {
+        TypedSwapNegativeIter(TypedMoveIter::new(components, iter))
+    }
+}
+
+impl<'a, T: 'a> Iterator for TypedSwapNegativeIter<'a, T> {
+    type Item = EntityId;
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some((src, dest)) = self.0.iter.next() {
+            // for all components being moved out
+            if self.0.components.contains_key(*src) {
+                // if the component had a value to begin with
+                if !self.0.components.contains_key(*dest) {
+                    // the entity being swapped with didn't have this component
+                    return Some(*src);
+                }
+            }
+        }
+        None
+    }
+}
+
+struct SwapTable {
+    lookup: BTreeMap<EntityId, EntityId>,
+    apply: Vec<(EntityId, EntityId)>,
+}
+
+impl SwapTable {
     fn new() -> Self {
-        ActionInsertionTable {
-{{#each component}}
-    {{#if type}}
-            {{id}}: HashMap::new(),
-    {{else}}
-            {{id}}: HashSet::new(),
-    {{/if}}
-{{/each}}
+        SwapTable {
+            lookup: BTreeMap::new(),
+            apply: Vec::new(),
+        }
+    }
+    fn clear(&mut self) {
+        self.lookup.clear();
+        self.apply.clear();
+    }
+    fn swap(&mut self, a: EntityId, b: EntityId) {
+        self.lookup.insert(a, b);
+        self.lookup.insert(b, a);
+        self.apply.push((a, b));
+    }
+    fn swaps_with(&self, entity: EntityId) -> Option<EntityId> {
+        self.lookup.get(&entity).map(|r| *r)
+    }
+    fn typed_positive_iter<'a, T>(&'a self, components: &'a EntityMap<T>) -> TypedMovePositiveIter<'a, T> {
+        TypedMovePositiveIter::new(components, self.lookup.iter())
+    }
+    fn typed_negative_iter<'a, T>(&'a self, components: &'a EntityMap<T>) -> TypedSwapNegativeIter<'a, T> {
+        TypedSwapNegativeIter::new(components, self.lookup.iter())
+    }
+    fn flag_positive_iter<'a>(&'a self, components: &'a EntitySet) -> FlagMovePositiveIter<'a> {
+        FlagMovePositiveIter::new(components, self.lookup.iter())
+    }
+    fn flag_negative_iter<'a>(&'a self, components: &'a EntitySet) -> FlagSwapNegativeIter<'a> {
+        FlagSwapNegativeIter::new(components, self.lookup.iter())
+    }
+}
+
+struct MoveProfile {
+    source: EntityId,
+    destination: EntityId,
+}
+
+impl MoveProfile {
+    fn new(source: EntityId, destination: EntityId) -> Self {
+        MoveProfile {
+            source: source,
+            destination: destination,
+        }
+    }
+}
+
+struct MoveTable {
+    lookup_from: BTreeMap<EntityId, EntityId>,
+    lookup_to: BTreeMap<EntityId, EntityId>,
+    apply: Vec<MoveProfile>,
+}
+
+impl MoveTable {
+    fn new() -> Self {
+        MoveTable {
+            lookup_from: BTreeMap::new(),
+            lookup_to: BTreeMap::new(),
+            apply: Vec::new(),
+        }
+    }
+    fn moves_in(&self, entity: EntityId) -> Option<EntityId> {
+        self.lookup_to.get(&entity).map(|r| *r)
+    }
+    fn moves_out(&self, entity: EntityId) -> Option<EntityId> {
+        self.lookup_from.get(&entity).map(|r| *r)
+    }
+    fn clear(&mut self) {
+        self.lookup_from.clear();
+        self.lookup_to.clear();
+        self.apply.clear();
+    }
+    fn mv(&mut self, source: EntityId, destination: EntityId) {
+        self.lookup_from.insert(source, destination);
+        self.lookup_to.insert(destination, source);
+        self.apply.push(MoveProfile::new(source, destination));
+    }
+    fn typed_positive_iter<'a, T>(&'a self, components: &'a EntityMap<T>) -> TypedMovePositiveIter<'a, T> {
+        TypedMovePositiveIter::new(components, self.lookup_to.iter())
+    }
+    fn typed_negative_iter<'a, T>(&'a self, components: &'a EntityMap<T>) -> TypedMoveNegativeIter<'a, T> {
+        TypedMoveNegativeIter::new(components, self.lookup_from.iter())
+    }
+    fn flag_positive_iter<'a>(&'a self, components: &'a EntitySet) -> FlagMovePositiveIter<'a> {
+        FlagMovePositiveIter::new(components, self.lookup_to.iter())
+    }
+    fn flag_negative_iter<'a>(&'a self, components: &'a EntitySet) -> FlagMoveNegativeIter<'a> {
+        FlagMoveNegativeIter::new(components, self.lookup_from.iter())
+    }
+}
+
+pub struct FlagActionProfile {
+    insertions: EntityHashSet,
+    removals: EntityHashSet,
+    swaps: SwapTable,
+    moves: MoveTable,
+    changed_entities: EntitySet,
+}
+
+impl FlagActionProfile {
+    fn new() -> Self {
+        FlagActionProfile {
+            insertions: EntityHashSet::new(),
+            removals: EntityHashSet::new(),
+            swaps: SwapTable::new(),
+            moves: MoveTable::new(),
+            changed_entities: EntitySet::new(),
         }
     }
 
-    pub fn clear(&mut self) {
-{{#each component}}
-        self.{{id}}.clear();
-{{/each}}
-    }
-
-{{#each component}}
-    {{#if type}}
-        {{#if copy}}
-    pub fn {{id}}(&self, entity: EntityId) -> Option<{{type}}> {
-        self.{{id}}.get(&entity).map(|r| *r)
-    }
-    pub fn {{id}}_ref(&self, entity: EntityId) -> Option<&{{type}}> {
-        self.{{id}}.get(&entity)
-    }
-    pub fn {{id}}_iter(&self) -> ActionInsertionTableValueIter<{{type}}> {
-        ActionInsertionTableValueIter { iter: self.{{id}}.iter() }
-    }
-        {{else}}
-    pub fn {{id}}(&self, entity: EntityId) -> Option<&{{type}}> {
-        self.{{id}}.get(&entity)
-    }
-    pub fn {{id}}_iter(&self) -> ActionInsertionTableRefIter<{{type}}> {
-        ActionInsertionTableRefIter { iter: self.{{id}}.iter() }
-    }
-        {{/if}}
-    {{else}}
-    pub fn contains_{{id}}(&self, entity: EntityId) -> bool {
-        self.{{id}}.contains(&entity)
-    }
-    pub fn {{id}}_iter(&self) -> ActionInsertionTableFlagIter {
-        ActionInsertionTableFlagIter { iter: self.{{id}}.iter() }
-    }
-    {{/if}}
-{{/each}}
-
-    pub fn entity(&self, id: EntityId) -> InsertionEntityRef {
-        InsertionEntityRef::new(id, self)
-    }
-}
-
-pub struct ActionRemovalTable {
-{{#each component}}
-    pub {{id}}: HashSet<EntityId>,
-{{/each}}
-}
-
-impl ActionRemovalTable {
-    fn new() -> Self {
-        ActionRemovalTable {
-{{#each component}}
-            {{id}}: HashSet::new(),
-{{/each}}
+    fn positive_iter<'a>(&'a self, components: &'a EntitySet) -> FlagActionPositiveIter<'a> {
+        FlagActionPositiveIter {
+            insertion_iter: self.insertions.iter(),
+            move_iter: self.moves.flag_positive_iter(components),
+            swap_iter: self.swaps.flag_positive_iter(components),
         }
     }
 
-    pub fn clear(&mut self) {
-{{#each component}}
-        self.{{id}}.clear();
-{{/each}}
+    fn negative_iter<'a>(&'a self, components: &'a EntitySet) -> FlagActionNegativeIter<'a> {
+        FlagActionNegativeIter {
+            removal_iter: self.removals.iter(),
+            move_iter: self.moves.flag_negative_iter(components),
+            swap_iter: self.swaps.flag_negative_iter(components),
+        }
+    }
+
+    fn clear(&mut self) {
+        self.insertions.clear();
+        self.removals.clear();
+        self.swaps.clear();
+        self.moves.clear();
+        self.changed_entities.clear();
+    }
+}
+
+pub struct FlagActionPositiveIter<'a> {
+    insertion_iter: EntityHashSetIter<'a>,
+    move_iter: FlagMovePositiveIter<'a>,
+    swap_iter: FlagMovePositiveIter<'a>,
+}
+
+impl<'a> Iterator for FlagActionPositiveIter<'a> {
+    type Item = EntityId;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.insertion_iter.next().or_else(
+            || self.move_iter.next().or_else(
+                || self.swap_iter.next()))
+    }
+}
+
+pub struct FlagActionNegativeIter<'a> {
+    removal_iter: EntityHashSetIter<'a>,
+    move_iter: FlagMoveNegativeIter<'a>,
+    swap_iter: FlagSwapNegativeIter<'a>,
+}
+
+impl<'a> Iterator for FlagActionNegativeIter<'a> {
+    type Item = EntityId;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.removal_iter.next().or_else(
+            || self.move_iter.next().or_else(
+                || self.swap_iter.next()))
+    }
+}
+
+pub struct TypedActionProfile<T> {
+    insertions: EntityHashMap<T>,
+    removals: EntityHashSet,
+    swaps: SwapTable,
+    moves: MoveTable,
+    changed_entities: EntitySet,
+}
+
+impl<T> TypedActionProfile<T> {
+     fn new() -> Self {
+        TypedActionProfile {
+            insertions: EntityHashMap::new(),
+            removals: EntityHashSet::new(),
+            swaps: SwapTable::new(),
+            moves: MoveTable::new(),
+            changed_entities: EntitySet::new(),
+        }
+    }
+
+    pub fn insertion_iter(&self) -> EntityHashMapIter<T> {
+        self.insertions.iter()
+    }
+
+    fn positive_iter<'a>(&'a self, components: &'a EntityMap<T>) -> TypedActionPositiveIter<'a, T> {
+        TypedActionPositiveIter {
+            insertion_iter: self.insertions.iter(),
+            move_iter: self.moves.typed_positive_iter(components),
+            swap_iter: self.swaps.typed_positive_iter(components),
+        }
+    }
+
+    fn negative_iter<'a>(&'a self, components: &'a EntityMap<T>) -> TypedActionNegativeIter<'a, T> {
+        TypedActionNegativeIter {
+            removal_iter: self.removals.iter(),
+            move_iter: self.moves.typed_negative_iter(components),
+            swap_iter: self.swaps.typed_negative_iter(components),
+        }
+    }
+
+    fn clear(&mut self) {
+        self.insertions.clear();
+        self.removals.clear();
+        self.swaps.clear();
+        self.moves.clear();
+        self.changed_entities.clear();
+    }
+}
+
+impl<T: Copy> TypedActionProfile<T> {
+    pub fn insertion_copy_iter(&self) -> EntityHashMapCopyIter<T> {
+        self.insertions.copy_iter()
+    }
+}
+pub struct TypedActionPositiveIter<'a, T: 'a> {
+    insertion_iter: EntityHashMapIter<'a, T>,
+    move_iter: TypedMovePositiveIter<'a, T>,
+    swap_iter: TypedMovePositiveIter<'a, T>,
+}
+
+impl<'a, T: 'a> Iterator for TypedActionPositiveIter<'a, T> {
+    type Item = (EntityId, &'a T);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.insertion_iter.next().or_else(
+            || self.move_iter.next().or_else(
+                || self.swap_iter.next()))
+    }
+}
+
+pub struct TypedActionNegativeIter<'a, T: 'a> {
+    removal_iter: EntityHashSetIter<'a>,
+    move_iter: TypedMoveNegativeIter<'a, T>,
+    swap_iter: TypedSwapNegativeIter<'a, T>,
+}
+
+impl<'a, T: 'a> Iterator for TypedActionNegativeIter<'a, T> {
+    type Item = EntityId;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.removal_iter.next().or_else(
+            || self.move_iter.next().or_else(
+                || self.swap_iter.next()))
     }
 }
 
 pub struct EcsAction {
-    pub insertions: ActionInsertionTable,
-    pub insertion_types: ComponentTypeSet,
-    pub removals: ActionRemovalTable,
-    pub removal_types: ComponentTypeSet,
-    pub removed_entities: HashSet<EntityId>,
-    pub properties: EcsActionProperties,
+
+{{#each component}}
+    {{#if type}}
+    {{id}}: TypedActionProfile<{{type}}>,
+    {{else}}
+    {{id}}: FlagActionProfile,
+    {{/if}}
+{{/each}}
+    changed_components: ComponentTypeSet,
+    properties: EcsActionProperties,
 }
 
 impl Default for EcsAction {
@@ -1210,43 +1801,85 @@ impl Default for EcsAction {
 impl EcsAction {
     pub fn new() -> Self {
         EcsAction {
-            insertions: ActionInsertionTable::new(),
-            insertion_types: ComponentTypeSet::new(),
-            removals: ActionRemovalTable::new(),
-            removal_types: ComponentTypeSet::new(),
-            removed_entities: HashSet::new(),
+{{#each component}}
+    {{#if type}}
+            {{id}}: TypedActionProfile::new(),
+    {{else}}
+            {{id}}: FlagActionProfile::new(),
+    {{/if}}
+{{/each}}
+            changed_components: ComponentTypeSet::new(),
             properties: EcsActionProperties::new(),
         }
     }
 
     pub fn clear(&mut self) {
-        self.insertions.clear();
-        self.insertion_types.clear();
-        self.removals.clear();
-        self.removal_types.clear();
-        self.removed_entities.clear();
+{{#each component}}
+        if self.changed_components.contains_{{id}}() {
+            self.{{id}}.clear();
+        }
+{{/each}}
+        self.changed_components.clear();
         self.properties.clear();
     }
 
 {{#each component}}
     {{#if type}}
     pub fn insert_{{id}}(&mut self, entity: EntityId, value: {{type}}) {
-        self.insertions.{{id}}.insert(entity, value);
-        self.insertion_types.insert_{{id}}();
+        self.{{id}}.insertions.insert(entity, value);
+        self.{{id}}.changed_entities.insert(entity);
+        self.changed_components.insert_{{id}}();
     }
+    pub fn {{id}}(&self) -> &TypedActionProfile<{{type}}> {
+        &self.{{id}}
+    }
+        {{#unless container}}
+    pub fn {{id}}_positive_iter<'a>(&'a self, ecs: &'a EcsCtx) -> TypedActionPositiveIter<'a, {{type}}> {
+        self.{{id}}.positive_iter(&ecs.table.{{id}})
+    }
+    pub fn {{id}}_negative_iter<'a>(&'a self, ecs: &'a EcsCtx) -> TypedActionNegativeIter<'a, {{type}}> {
+        self.{{id}}.negative_iter(&ecs.table.{{id}})
+    }
+        {{/unless}}
     {{else}}
+    pub fn {{id}}_positive_iter<'a>(&'a self, ecs: &'a EcsCtx) -> FlagActionPositiveIter<'a> {
+        self.{{id}}.positive_iter(&ecs.table.{{id}})
+    }
+    pub fn {{id}}_negative_iter<'a>(&'a self, ecs: &'a EcsCtx) -> FlagActionNegativeIter<'a> {
+        self.{{id}}.negative_iter(&ecs.table.{{id}})
+    }
     pub fn insert_{{id}}(&mut self, entity: EntityId) {
-        self.insertions.{{id}}.insert(entity);
-        self.insertion_types.insert_{{id}}();
+        self.{{id}}.insertions.insert(entity);
+        self.{{id}}.changed_entities.insert(entity);
+        self.changed_components.insert_{{id}}();
+    }
+    pub fn {{id}}(&self) -> &FlagActionProfile {
+        &self.{{id}}
     }
     {{/if}}
     pub fn remove_{{id}}(&mut self, entity: EntityId) {
-        self.removals.{{id}}.insert(entity);
-        self.removal_types.insert_{{id}}();
+        self.{{id}}.removals.insert(entity);
+        self.{{id}}.changed_entities.insert(entity);
+        self.changed_components.insert_{{id}}();
     }
 {{/each}}
-    pub fn remove_entity(&mut self, entity: EntityId) {
-        self.removed_entities.insert(entity);
+    pub fn remove_entity(&mut self, entity: EntityRef) {
+        self.remove_entity_by_id(entity.id, entity.ctx);
+    }
+    pub fn remove_entity_by_id(&mut self, entity: EntityId, ecs: &EcsCtx) {
+        ecs.tracker.get(entity).map(|components| {
+            for component in components.iter() {
+                self.remove_component(entity, component);
+            }
+        });
+    }
+    pub fn remove_component(&mut self, entity: EntityId, component_type: ComponentType) {
+        match component_type {
+{{#each component}}
+            component_type::{{id_uppercase}} => self.remove_{{id}}(entity),
+{{/each}}
+            _ => panic!("Invalid component type: {}", component_type),
+        }
     }
 {{#each action_property}}
     {{#if type}}
@@ -1278,65 +1911,33 @@ impl EcsAction {
     pub fn entity_mut(&mut self, id: EntityId) -> ActionEntityRefMut {
         ActionEntityRefMut::new(id, self)
     }
-
-    pub fn entity(&self, id: EntityId) -> InsertionEntityRef {
-        self.insertions.entity(id)
-    }
 }
 
 #[derive(Clone, Copy)]
-pub struct InsertionEntityRef<'a> {
+pub enum ContainerComponentRef<'a, ContainerType: 'a, Type: 'a> {
+    Contained(&'a ContainerType),
+    Raw(&'a Type),
+}
+
+#[derive(Clone, Copy)]
+pub enum Change<T> {
+    Insert(T),
+    Remove,
+}
+
+#[derive(Clone, Copy)]
+pub struct PostActionEntityRef<'a> {
     id: EntityId,
-    insertions: &'a ActionInsertionTable,
+    ecs: &'a EcsCtx,
+    action: &'a EcsAction,
 }
 
-impl<'a> InsertionEntityRef<'a> {
-    fn new(id: EntityId, insertions: &'a ActionInsertionTable) -> Self {
-        InsertionEntityRef {
+impl<'a> PostActionEntityRef<'a> {
+    fn new(id: EntityId, ecs: &'a EcsCtx, action: &'a EcsAction) -> Self {
+        PostActionEntityRef {
             id: id,
-            insertions: insertions,
-        }
-    }
-
-    pub fn id(self) -> EntityId {
-        self.id
-    }
-
-{{#each component}}
-    {{#if type}}
-        {{#if copy}}
-    pub fn {{id}}(self) -> Option<{{type}}> {
-        self.insertions.{{id}}(self.id)
-    }
-    pub fn {{id}}_ref(self) -> Option<&'a {{type}}> {
-        self.insertions.{{id}}_ref(self.id)
-    }
-        {{else}}
-    pub fn {{id}}(self) -> Option<&'a {{type}}> {
-        self.insertions.{{id}}(self.id)
-    }
-        {{/if}}
-    {{else}}
-    pub fn contains_{{id}}(self) -> bool {
-        self.insertions.contains_{{id}}(self.id)
-    }
-    {{/if}}
-{{/each}}
-}
-
-#[derive(Clone, Copy)]
-pub struct PostInsertionEntityRef<'a> {
-    id : EntityId,
-    ctx: &'a EcsCtx,
-    insertions: &'a ActionInsertionTable,
-}
-
-impl<'a> PostInsertionEntityRef<'a> {
-    fn new(id: EntityId, ctx: &'a EcsCtx, insertions: &'a ActionInsertionTable) -> Self {
-        PostInsertionEntityRef {
-            id: id,
-            ctx: ctx,
-            insertions: insertions,
+            ecs: ecs,
+            action: action,
         }
     }
 
@@ -1345,54 +1946,264 @@ impl<'a> PostInsertionEntityRef<'a> {
     }
 
     pub fn to_entity_ref(self) -> EntityRef<'a> {
-        EntityRef::new(self.id, self.ctx)
+        EntityRef::new(self.id, self.ecs)
     }
 
 {{#each component}}
-    {{#unless container}}
-        {{#if type}}
+    {{#if type}}
+        {{#if container}}
+    pub fn {{id}}(self) -> Option<ContainerComponentRef<'a, {{container}}<{{type}}>, {{type}}>> {
+        if let Some(change) = self.change_{{id}}() {
+            if let Change::Insert(component) = change {
+                Some(component)
+            } else {
+                None
+            }
+        } else {
+            self.current_{{id}}().map(ContainerComponentRef::Contained)
+        }
+    }
+    pub fn current_{{id}}(self) -> Option<&'a {{container}}<{{type}}>> {
+        self.ecs.{{id}}(self.id)
+    }
+    pub fn change_{{id}}(self) -> Option<Change<ContainerComponentRef<'a, {{container}}<{{type}}>, {{type}}>>> {
+        let profile = &self.action.{{id}};
+
+        // check if component is explicitly inserted
+        if let Some(component) = profile.insertions.get(self.id) {
+            return Some(Change::Insert(ContainerComponentRef::Raw(component)));
+        }
+
+        // check if component is explicitly removed
+        if profile.removals.contains(self.id) {
+            return Some(Change::Remove);
+        }
+
+        // check if component is swapped in
+        if let Some(other) = profile.swaps.swaps_with(self.id) {
+            if let Some(component) = self.ecs.{{id}}(other) {
+                return Some(Change::Insert(ContainerComponentRef::Contained(component)));
+            } else {
+                return Some(Change::Remove);
+            }
+        }
+
+        // check if component is moved in
+        if let Some(src) = profile.moves.moves_in(self.id) {
+            if let Some(component) = self.ecs.{{id}}(src) {
+                return Some(Change::Insert(ContainerComponentRef::Contained(component)));
+            }
+        }
+
+        // check if component is moved out
+        if profile.moves.moves_out(self.id).is_some() {
+            return Some(Change::Remove);
+        }
+
+        None
+    }
+        {{else}}
             {{#if copy}}
     pub fn {{id}}(self) -> Option<{{type}}> {
-        self.current_{{id}}().or_else(|| self.new_{{id}}())
+        if let Some(change) = self.change_{{id}}() {
+            if let Change::Insert(component) = change {
+                Some(component)
+            } else {
+                None
+            }
+        } else {
+            self.current_{{id}}()
+        }
     }
     pub fn current_{{id}}(self) -> Option<{{type}}> {
-        self.ctx.{{id}}(self.id)
+        self.ecs.{{id}}(self.id)
     }
-    pub fn new_{{id}}(self) -> Option<{{type}}> {
-        self.insertions.{{id}}(self.id)
+    pub fn change_{{id}}(self) -> Option<Change<{{type}}>> {
+        let profile = &self.action.{{id}};
+
+        // check if component is explicitly inserted
+        if let Some(component) = profile.insertions.get(self.id) {
+            return Some(Change::Insert(*component));
+        }
+
+        // check if component is explicitly removed
+        if profile.removals.contains(self.id) {
+            return Some(Change::Remove);
+        }
+
+        // check if component is swapped in
+        if let Some(other) = profile.swaps.swaps_with(self.id) {
+            if let Some(component) = self.ecs.{{id}}(other) {
+                return Some(Change::Insert(component));
+            } else {
+                return Some(Change::Remove);
+            }
+        }
+
+        // check if component is moved in
+        if let Some(src) = profile.moves.moves_in(self.id) {
+            if let Some(component) = self.ecs.{{id}}(src) {
+                return Some(Change::Insert(component));
+            }
+        }
+
+        // check if component is moved out
+        if profile.moves.moves_out(self.id).is_some() {
+            return Some(Change::Remove);
+        }
+
+        None
     }
     pub fn {{id}}_ref(self) -> Option<&'a {{type}}> {
-        self.current_{{id}}_ref().or_else(|| self.new_{{id}}_ref())
+        if let Some(change) = self.change_{{id}}_ref() {
+            if let Change::Insert(component) = change {
+                Some(component)
+            } else {
+                None
+            }
+        } else {
+            self.current_{{id}}_ref()
+        }
     }
     pub fn current_{{id}}_ref(self) -> Option<&'a {{type}}> {
-        self.ctx.{{id}}_ref(self.id)
+        self.ecs.{{id}}_ref(self.id)
     }
-    pub fn new_{{id}}_ref(self) -> Option<&'a {{type}}> {
-        self.insertions.{{id}}_ref(self.id)
+    pub fn change_{{id}}_ref(self) -> Option<Change<&'a {{type}}>> {
+        let profile = &self.action.{{id}};
+
+        // check if component is explicitly inserted
+        if let Some(component) = profile.insertions.get(self.id) {
+            return Some(Change::Insert(component));
+        }
+
+        // check if component is explicitly removed
+        if profile.removals.contains(self.id) {
+            return Some(Change::Remove);
+        }
+
+        // check if component is swapped in
+        if let Some(other) = profile.swaps.swaps_with(self.id) {
+            if let Some(component) = self.ecs.{{id}}_ref(other) {
+                return Some(Change::Insert(component));
+            } else {
+                return Some(Change::Remove);
+            }
+        }
+
+        // check if component is moved in
+        if let Some(src) = profile.moves.moves_in(self.id) {
+            if let Some(component) = self.ecs.{{id}}_ref(src) {
+                return Some(Change::Insert(component));
+            }
+        }
+
+        // check if component is moved out
+        if profile.moves.moves_out(self.id).is_some() {
+            return Some(Change::Remove);
+        }
+
+        None
     }
             {{else}}
     pub fn {{id}}(self) -> Option<&'a {{type}}> {
-        self.current_{{id}}().or_else(|| self.new_{{id}}())
+        if let Some(change) = self.change_{{id}}() {
+            if let Change::Insert(component) = change {
+                Some(component)
+            } else {
+                None
+            }
+        } else {
+            self.current_{{id}}()
+        }
     }
     pub fn current_{{id}}(self) -> Option<&'a {{type}}> {
-        self.ctx.{{id}}(self.id)
+        self.ecs.{{id}}(self.id)
     }
-    pub fn new_{{id}}(self) -> Option<&'a {{type}}> {
-        self.insertions.{{id}}(self.id)
+    pub fn change_{{id}}(self) -> Option<Change<&'a {{type}}>> {
+        let profile = &self.action.{{id}};
+
+        // check if component is explicitly inserted
+        if let Some(component) = profile.insertions.get(self.id) {
+            return Some(Change::Insert(component));
+        }
+
+        // check if component is explicitly removed
+        if profile.removals.contains(self.id) {
+            return Some(Change::Remove);
+        }
+
+        // check if component is swapped in
+        if let Some(other) = profile.swaps.swaps_with(self.id) {
+            if let Some(component) = self.ecs.{{id}}(other) {
+                return Some(Change::Insert(component));
+            } else {
+                return Some(Change::Remove);
+            }
+        }
+
+        // check if component is moved in
+        if let Some(src) = profile.moves.moves_in(self.id) {
+            if let Some(component) = self.ecs.{{id}}(src) {
+                return Some(Change::Insert(component));
+            }
+        }
+
+        // check if component is moved out
+        if profile.moves.moves_out(self.id).is_some() {
+            return Some(Change::Remove);
+        }
+
+        None
     }
             {{/if}}
-        {{else}}
-    pub fn contains_{{id}}(self) -> bool {
-        self.current_contains_{{id}}() || self.new_contains_{{id}}()
-    }
-    pub fn current_contains_{{id}}(self) -> bool {
-        self.ctx.contains_{{id}}(self.id)
-    }
-    pub fn new_contains_{{id}}(self) -> bool {
-        self.insertions.contains_{{id}}(self.id)
-    }
         {{/if}}
-    {{/unless}}
+    {{else}}
+    pub fn contains_{{id}}(self) -> bool {
+        self.change_{{id}}().unwrap_or_else(|| self.current_contains_{{id}}())
+    }
+
+    pub fn current_contains_{{id}}(self) -> bool {
+        self.ecs.contains_{{id}}(self.id)
+    }
+
+    // returns true iff the flag will be set after this action
+    pub fn change_{{id}}(self) -> Option<bool> {
+        let profile = &self.action.{{id}};
+
+        // check if component is explicitly inserted
+        if profile.insertions.contains(self.id) {
+            return Some(true);
+        }
+
+        // check if component is explicitly removed
+        if profile.removals.contains(self.id) {
+            return Some(false);
+        }
+
+        // check if component is swapped in or out
+        if let Some(other) = profile.swaps.swaps_with(self.id) {
+            if self.ecs.contains_{{id}}(other) {
+                return Some(true);
+            } else {
+                return Some(false);
+            }
+        }
+
+        // check if component is moved in
+        if let Some(src) = profile.moves.moves_in(self.id) {
+            if self.ecs.contains_{{id}}(src) {
+                return Some(true);
+            }
+        }
+
+        // check if component is moved out
+        if profile.moves.moves_out(self.id).is_some() {
+            return Some(false);
+        }
+
+        None
+    }
+    {{/if}}
 {{/each}}
 }
 
