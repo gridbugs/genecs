@@ -1862,6 +1862,18 @@ impl EcsAction {
         self.{{id}}.changed_entities.insert(entity);
         self.changed_components.insert_{{id}}();
     }
+    pub fn move_{{id}}(&mut self, source: EntityId, destination: EntityId) {
+        self.{{id}}.moves.mv(source, destination);
+        self.{{id}}.changed_entities.insert(source);
+        self.{{id}}.changed_entities.insert(destination);
+        self.changed_components.insert_{{id}}();
+    }
+    pub fn swap_{{id}}(&mut self, a: EntityId, b: EntityId) {
+        self.{{id}}.swaps.swap(a, b);
+        self.{{id}}.changed_entities.insert(a);
+        self.{{id}}.changed_entities.insert(b);
+        self.changed_components.insert_{{id}}();
+    }
 {{/each}}
     pub fn remove_entity(&mut self, entity: EntityRef) {
         self.remove_entity_by_id(entity.id, entity.ctx);
