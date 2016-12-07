@@ -45,8 +45,8 @@ impl EntitySet {
         self.inner.insert(entity);
     }
 
-    pub fn remove(&mut self, entity: EntityId) {
-        self.inner.remove(&entity);
+    pub fn remove(&mut self, entity: EntityId) -> bool {
+        self.inner.remove(&entity)
     }
 
     pub fn contains(&self, entity: EntityId) -> bool {
@@ -331,8 +331,8 @@ impl EcsTable {
     pub fn contains_{{id}}(&self, entity: EntityId) -> bool {
         self.{{id}}.contains(entity)
     }
-    pub fn remove_{{id}}(&mut self, entity: EntityId) {
-        self.{{id}}.remove(entity);
+    pub fn remove_{{id}}(&mut self, entity: EntityId) -> bool {
+        self.{{id}}.remove(entity)
     }
     {{/if}}
 
@@ -510,12 +510,11 @@ impl EcsCtx {
     pub fn remove_{{id}}(&mut self, entity: EntityId)
     {{#if type}}
         -> Option<{{type}}>
+    {{else}}
+        -> bool
     {{/if}}
     {
-    {{#if type}}
-        let ret =
-    {{/if}}
-        self.table.remove_{{id}}(entity);
+        let ret = self.table.remove_{{id}}(entity);
         let empty = self.tracker.get_mut(&entity).map(|set| {
             set.remove_{{id}}();
             set.is_empty()
@@ -526,8 +525,25 @@ impl EcsCtx {
         {{#if queried}}
         self.set_dirty_remove_{{id}}();
         {{/if}}
-    {{#if type}}
+
         ret
+    }
+
+    pub fn move_{{id}}(&mut self, src: EntityId, dst: EntityId) {
+    {{#if type}}
+        {{#if container}}
+        self.bare_remove_{{id}}(src).map(|x| {
+            self.bare_insert_{{id}}(dst, x);
+        });
+        {{else}}
+        self.remove_{{id}}(src).map(|x| {
+            self.insert_{{id}}(dst, x);
+        });
+        {{/if}}
+    {{else}}
+        if self.remove_{{id}}(src) {
+            self.insert_{{id}}(dst);
+        }
     {{/if}}
     }
 
@@ -891,6 +907,8 @@ impl<'a> EntityRefMut<'a> {
     pub fn remove_{{id}}(&mut self)
     {{#if type}}
         -> Option<{{type}}>
+    {{else}}
+        -> bool
     {{/if}}
     {
         self.ctx.remove_{{id}}(self.id)
