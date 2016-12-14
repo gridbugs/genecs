@@ -515,7 +515,8 @@ impl DirtyComponentTracker {
 
 {{#each query}}
     fn should_populate_{{id}}(&self) -> bool {
-        (true {{#each components}}&& self.{{id}}.insert {{/each}}) ||
+        (false {{#each components}}{{#if type}} || self.{{id}}.insert {{/if}}{{/each}}) ||
+        (true {{#each components}}{{#unless type}} && self.{{id}}.insert {{/unless}}{{/each}}) ||
         (false {{#each components}}|| self.{{id}}.remove {{/each}})
     }
 {{/each}}
@@ -956,16 +957,18 @@ impl EcsCtx {
                 component_type::{{id_uppercase}} => {
         {{#if type}}
                     for (id, value) in self.table.{{id}}.iter() {
+            {{#if copy}}
+                        let {{id}} = *value;
+            {{else}}
                         let {{id}} = value as *const {{type}};
+            {{/if}}
             {{#each other_components}}
-                        let {{id}} = if let Some(component) =
+                        let {{id}} = if let Some(component) = self.table.{{id}}(id) {
                 {{#if copy}}
-                            self.table.{{id}}_ref(id)
+                            component
                 {{else}}
-                            self.table.{{id}}(id)
-                {{/if}}
-                        {
                             component as *const {{type}}
+                {{/if}}
                         } else {
                             continue;
                         };
@@ -982,14 +985,12 @@ impl EcsCtx {
         {{else}}
                     for id in self.table.{{id}}.iter() {
             {{#each other_components}}
-                        let {{id}} = if let Some(component) =
+                        let {{id}} = if let Some(component) = self.table.{{id}}(id) {
                 {{#if copy}}
-                            self.table.{{id}}_ref(id)
+                            component
                 {{else}}
-                            self.table.{{id}}(id)
-                {{/if}}
-                        {
                             component as *const {{type}}
+                {{/if}}
                         } else {
                             continue;
                         };
@@ -1268,13 +1269,38 @@ impl<'a> EntityPopulate for ActionEntityRefMut<'a> {
 }
 
 {{#each query}}
-pub struct {{prefix}}Result<'a> {
+pub struct {{prefix}}Result{{#unless all_copy}}<'a>{{/unless}} {
     id: EntityId,
-    {{#each components}}
-        {{#if type}}
+{{#each components}}
+    {{#if type}}
+        {{#if copy}}
+    {{id}}: {{type}},
+        {{else}}
     {{id}}: &'a {{type}},
         {{/if}}
-    {{/each}}
+    {{/if}}
+{{/each}}
+}
+
+impl{{#unless all_copy}}<'a>{{/unless}} {{prefix}}Result{{#unless all_copy}}<'a>{{/unless}} {
+
+    pub fn id(&self) -> EntityId {
+        self.id
+    }
+
+{{#each components}}
+    {{#if type}}
+        {{#if copy}}
+    pub fn {{id}}(&self) -> {{type}} {
+        self.{{id}}
+    }
+        {{else}}
+    pub fn {{id}}(&self) -> &{{type}} {
+        self.{{id}}
+    }
+        {{/if}}
+    {{/if}}
+{{/each}}
 }
 
 pub struct {{prefix}}Iter<'a> {
@@ -1282,7 +1308,7 @@ pub struct {{prefix}}Iter<'a> {
 }
 
 impl<'a> Iterator for {{prefix}}Iter<'a> {
-    type Item = {{prefix}}Result<'a>;
+    type Item = {{prefix}}Result{{#unless all_copy}}<'a>{{/unless}};
     fn next(&mut self) -> Option<Self::Item> {
         self.slice_iter.next().map(|inner| {
             inner.to_outer_result()
@@ -1292,25 +1318,37 @@ impl<'a> Iterator for {{prefix}}Iter<'a> {
 
 struct {{prefix}}InnerResult {
     id: EntityId,
-    {{#each components}}
-        {{#if type}}
+{{#each components}}
+    {{#if type}}
+        {{#if copy}}
+    {{id}}: {{type}},
+        {{else}}
     {{id}}: *const {{type}},
         {{/if}}
-    {{/each}}
+    {{/if}}
+{{/each}}
 }
 
 impl {{prefix}}InnerResult {
     fn to_outer_result(&self) -> {{prefix}}Result {
+{{#unless all_copy}}
         unsafe {
+{{/unless}}
             {{prefix}}Result {
                 id: self.id,
 {{#each components}}
     {{#if type}}
+        {{#if copy}}
+                {{id}}: self.{{id}},
+        {{else}}
                 {{id}}: &(*self.{{id}}),
+        {{/if}}
     {{/if}}
 {{/each}}
             }
+{{#unless all_copy}}
         }
+{{/unless}}
     }
 }
 
@@ -2500,10 +2538,14 @@ fn generate_code(mut toml: String) -> String {
             let components_json = query_obj.remove("components").unwrap();
             let component_names = components_json.as_array().unwrap();
             let mut component_clone_arr = json::Array::new();
+            let mut all_copy = true;
             for component in component_names {
                 let component_str = component.as_string().unwrap();
                 let mut clone = component_clones.get(component_str).unwrap().clone();
                 let no_type = clone.get("type").is_none();
+                if !no_type && clone.get("copy").is_none() {
+                    all_copy = false;
+                }
                 let mut result_components = json::Array::new();
                 for component_inner in component_names {
                     let component_inner_str = component_inner.as_string().unwrap();
@@ -2516,6 +2558,9 @@ fn generate_code(mut toml: String) -> String {
                 }
                 clone.insert("other_components".to_string(), Json::Array(result_components));
                 component_clone_arr.push(Json::Object(clone));
+            }
+            if all_copy {
+                query_obj.insert("all_copy".to_string(), Json::Boolean(true));
             }
             query_obj.insert("components".to_string(), Json::Array(component_clone_arr));
         }
