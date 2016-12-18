@@ -1702,6 +1702,14 @@ impl FlagActionProfile {
         self.moves.clear();
         self.changed_entities.clear();
     }
+
+    pub fn insertion_iter(&self) -> EntityHashSetIter {
+        self.insertions.iter()
+    }
+
+    pub fn removal_iter(&self) -> EntityHashSetIter {
+        self.removals.iter()
+    }
 }
 
 pub struct FlagActionPositiveIter<'a> {
@@ -1755,6 +1763,10 @@ impl<T> TypedActionProfile<T> {
 
     pub fn insertion_iter(&self) -> EntityHashMapIter<T> {
         self.insertions.iter()
+    }
+
+    pub fn removal_iter(&self) -> EntityHashSetIter {
+        self.removals.iter()
     }
 
     fn positive_iter<'a>(&'a self, components: &'a EntityMap<T>) -> TypedActionPositiveIter<'a, T> {
