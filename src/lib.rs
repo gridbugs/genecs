@@ -22,6 +22,7 @@ use std::cell::{UnsafeCell, RefCell, Ref, RefMut};
 use std::slice;
 use std::usize;
 use std::vec;
+use std::mem;
 
 {{#each imports}}
 use {{ this }};
@@ -1965,8 +1966,14 @@ impl EcsAction {
         self.properties.insert_{{id}}();
     }
     {{/if}}
-    pub fn clear_{{id}}(&mut self) {
-        self.properties.remove_{{id}}();
+    pub fn clear_{{id}}(&mut self) ->
+    {{#if type}}
+        Option<{{type}}>
+    {{else}}
+        bool
+    {{/if}}
+    {
+        self.properties.remove_{{id}}()
     }
 {{/each}}
 
@@ -2454,11 +2461,17 @@ impl EcsActionProperties {
         self.{{id}}
     }
     {{/if}}
-    pub fn remove_{{id}}(&mut self) {
+    pub fn remove_{{id}}(&mut self) ->
     {{#if type}}
-        self.{{id}} = None;
+        Option<{{type}}>
     {{else}}
-        self.{{id}} = false;
+        bool
+    {{/if}}
+    {
+    {{#if type}}
+        mem::replace(&mut self.{{id}}, None)
+    {{else}}
+        mem::replace(&mut self.{{id}}, false)
     {{/if}}
     }
 {{/each}}
