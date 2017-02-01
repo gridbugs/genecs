@@ -827,6 +827,18 @@ impl EcsCtx {
         ret
     }
 
+    pub fn remove_{{id}}_into(&mut self, entity: EntityId, action: &mut EcsAction) {
+    {{#if type}}
+        self.remove_{{id}}(entity).map(|component| {
+            action.insert_{{id}}(entity, component);
+        });
+    {{else}}
+        if self.remove_{{id}}(entity) {
+            action.insert_{{id}}(entity);
+        }
+    {{/if}}
+    }
+
     pub fn move_{{id}}(&mut self, src: EntityId, dst: EntityId) {
     {{#if type}}
         {{#if container}}
@@ -1059,6 +1071,47 @@ impl EcsCtx {
         action.changed_components.clear();
         action.properties.clear();
     }
+
+    pub fn commit_into(&mut self, from: &mut EcsAction, to: &mut EcsAction) {
+{{#each component}}
+
+        if from.changed_components.contains_{{id}}() {
+
+    {{#if type}}
+
+            for (id, component) in from.{{id}}.insertions.drain() {
+                self.insert_{{id}}(id, component);
+            }
+
+    {{else}}
+
+            for id in from.{{id}}.insertions.drain() {
+                self.insert_{{id}}(id);
+            }
+
+    {{/if}}
+
+            for id in from.{{id}}.removals.drain() {
+                self.remove_{{id}}_into(id, to);
+            }
+
+            for (a, b) in from.{{id}}.swaps.apply.drain(..) {
+                self.swap_{{id}}(a, b);
+            }
+            from.{{id}}.swaps.lookup.clear();
+
+            for mv in from.{{id}}.moves.apply.drain(..) {
+                self.move_{{id}}(mv.source, mv.destination);
+            }
+            from.{{id}}.moves.lookup_to.clear();
+            from.{{id}}.moves.lookup_from.clear();
+        }
+{{/each}}
+
+        from.changed_components.clear();
+        from.properties.clear();
+    }
+
     pub fn entity_iter<I: Iterator<Item=EntityId>>(&self, iter: I) -> EntityRefIter<I> {
         EntityRefIter::new(self, iter)
     }
