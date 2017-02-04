@@ -2015,6 +2015,9 @@ impl EcsAction {
         self.properties.insert_{{id}}(value);
     }
     {{else}}
+    pub fn contains_{{id}}(&self) -> bool {
+        self.properties.contains_{{id}}()
+    }
     pub fn set_{{id}}(&mut self) {
         self.properties.insert_{{id}}();
     }
