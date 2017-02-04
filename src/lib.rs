@@ -2512,6 +2512,7 @@ impl EcsActionProperties {
     {{else}}
     pub fn insert_{{id}}(&mut self) {
         self.{{id}} = true;
+        self.property_types.insert_{{id}}();
     }
     pub fn contains_{{id}}(&self) -> bool {
         self.{{id}}
