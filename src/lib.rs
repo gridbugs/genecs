@@ -30,6 +30,7 @@ use {{ this }};
 
 pub type EntityId = u64;
 
+#[derive(RustcEncodable, RustcDecodable)]
 pub struct EntityMap<T> {
     inner: BTreeMap<EntityId, T>,
 }
@@ -145,6 +146,7 @@ impl<'a, T: 'a + Copy> Iterator for EntityMapCopyIter<'a, T> {
     }
 }
 
+#[derive(RustcEncodable, RustcDecodable)]
 pub struct EntitySet {
     inner: BTreeSet<EntityId>,
 }
@@ -404,6 +406,7 @@ pub mod component_type {
     pub const INVALID_COMPONENT: usize = usize::MAX;
 }
 
+#[derive(RustcEncodable, RustcDecodable)]
 pub struct ComponentTypeSet {
     bitfields: [usize; COMPONENT_TYPE_SET_NUM_WORDS],
 }
@@ -817,6 +820,130 @@ impl EcsCtx {
 
     pub fn entity_iter<I: Iterator<Item=EntityId>>(&self, iter: I) -> EntityRefIter<I> {
         EntityRefIter::new(self, iter)
+    }
+}
+
+#[derive(RustcEncodable, RustcDecodable)]
+pub struct SerializableEcsCtx {
+{{#each component}}
+    {{#if type}}
+    {{id}}: EntityMap<{{type}}>,
+    {{else}}
+    {{id}}: EntitySet,
+    {{/if}}
+{{/each}}
+    tracker: EntityMap<ComponentTypeSet>,
+}
+
+impl From<SerializableEcsCtx> for EcsCtx {
+    fn from(ecs: SerializableEcsCtx) -> Self {
+        let SerializableEcsCtx {
+{{#each component}}
+    {{#if container}}
+            mut {{id}},
+    {{else}}
+            {{id}},
+    {{/if}}
+{{/each}}
+            tracker,
+        } = ecs;
+
+        EcsCtx {
+{{#each component}}
+    {{#if type}}
+        {{#if container}}
+            {{#if RefCell}}
+            {{id}}: {
+                let mut map = EntityMap::new();
+                let keys: Vec<EntityId> = {{id}}.keys().collect();
+                for key in keys {
+                    if let Some(value) = {{id}}.remove(key) {
+                        map.insert(key, RefCell::new(value));
+                    }
+                }
+
+                map
+            },
+            {{/if}}
+            {{#if UnsafeCell}}
+            {{id}}: {
+                let mut map = EntityMap::new();
+                let keys: Vec<EntityId> = {{id}}.keys().collect();
+                for key in keys {
+                    if let Some(value) = {{id}}.remove(key) {
+                        map.insert(key, UnsafeCell::new(value));
+                    }
+                }
+
+                map
+            },
+            {{/if}}
+        {{else}}
+            {{id}}: {{id}},
+        {{/if}}
+    {{else}}
+            {{id}}: {{id}},
+    {{/if}}
+{{/each}}
+            tracker: tracker,
+        }
+    }
+}
+
+impl From<EcsCtx> for SerializableEcsCtx {
+    fn from(ecs: EcsCtx) -> Self {
+        let EcsCtx {
+{{#each component}}
+    {{#if container}}
+            mut {{id}},
+    {{else}}
+            {{id}},
+    {{/if}}
+{{/each}}
+            tracker,
+        } = ecs;
+
+        SerializableEcsCtx {
+{{#each component}}
+    {{#if type}}
+        {{#if container}}
+            {{#if RefCell}}
+            {{id}}: {
+                let mut map = EntityMap::new();
+                let keys: Vec<EntityId> = {{id}}.keys().collect();
+                for key in keys {
+                    if let Some(cell) = {{id}}.remove(key) {
+                        map.insert(key, cell.into_inner());
+                    }
+                }
+
+                map
+            },
+            {{/if}}
+            {{#if UnsafeCell}}
+            {{id}}: {
+                let mut map = EntityMap::new();
+                let keys: Vec<EntityId> = {{id}}.keys().collect();
+                for key in keys {
+                    if let Some(cell) = {{id}}.remove(key) {
+                        let ptr = cell.get();
+                        assert!(!ptr.is_null(), "Attempt to serialize null UnsafeCell");
+                        map.insert(key, unsafe { cell.into_inner() });
+                    }
+                }
+
+                map
+            },
+            {{/if}}
+        {{else}}
+            {{id}}: {{id}},
+        {{/if}}
+    {{else}}
+            {{id}}: {{id}},
+    {{/if}}
+{{/each}}
+            tracker: tracker,
+        }
     }
 }
 
