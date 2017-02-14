@@ -30,7 +30,7 @@ use {{ this }};
 
 pub type EntityId = u64;
 
-#[derive(RustcEncodable, RustcDecodable)]
+#[derive(Serialize, Deserialize)]
 pub struct EntityMap<T> {
     inner: BTreeMap<EntityId, T>,
 }
@@ -146,7 +146,7 @@ impl<'a, T: 'a + Copy> Iterator for EntityMapCopyIter<'a, T> {
     }
 }
 
-#[derive(RustcEncodable, RustcDecodable)]
+#[derive(Serialize, Deserialize)]
 pub struct EntitySet {
     inner: BTreeSet<EntityId>,
 }
@@ -406,7 +406,7 @@ pub mod component_type {
     pub const INVALID_COMPONENT: usize = usize::MAX;
 }
 
-#[derive(RustcEncodable, RustcDecodable)]
+#[derive(Serialize, Deserialize)]
 pub struct ComponentTypeSet {
     bitfields: [usize; COMPONENT_TYPE_SET_NUM_WORDS],
 }
@@ -823,7 +823,7 @@ impl EcsCtx {
     }
 }
 
-#[derive(RustcEncodable, RustcDecodable)]
+#[derive(Serialize, Deserialize)]
 pub struct SerializableEcsCtx {
 {{#each component}}
     {{#if type}}
