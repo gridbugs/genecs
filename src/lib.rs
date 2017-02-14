@@ -11,7 +11,7 @@ use std::mem;
 
 use tomson::Toml;
 use handlebars::Handlebars;
-use rustc_serialize::json::{self, Json};
+use rustc_serialize::json::Json;
 
 
 const TEMPLATE: &'static str = r#"// Automatically generated. Do not edit.
@@ -480,49 +480,6 @@ impl ComponentTypeSet {
 {{/each}}
 }
 
-struct ComponentDirtyFlags {
-    insert: bool,
-    remove: bool,
-}
-
-impl ComponentDirtyFlags {
-    fn new() -> Self {
-        ComponentDirtyFlags {
-            insert: false,
-            remove: false,
-        }
-    }
-
-    fn clean(&mut self) {
-        self.insert = false;
-        self.remove = false;
-    }
-}
-
-struct DirtyComponentTracker {
-{{#each queried_components}}
-    {{ @key }}: ComponentDirtyFlags,
-{{/each}}
-}
-
-impl DirtyComponentTracker {
-    fn new() -> Self {
-        DirtyComponentTracker {
-{{#each queried_components}}
-            {{ @key }}: ComponentDirtyFlags::new(),
-{{/each}}
-        }
-    }
-
-{{#each query}}
-    fn should_populate_{{id}}(&self) -> bool {
-        (false {{#each components}}{{#if type}} || self.{{id}}.insert {{/if}}{{/each}}) ||
-        (true {{#each components}}{{#unless type}} && self.{{id}}.insert {{/unless}}{{/each}}) ||
-        (false {{#each components}}|| self.{{id}}.remove {{/each}})
-    }
-{{/each}}
-}
-
 pub struct EcsTable {
 {{#each component}}
     {{#if type}}
@@ -684,7 +641,6 @@ impl EcsTable {
 pub struct EcsCtx {
     table: EcsTable,
     tracker: EntityMap<ComponentTypeSet>,
-    query_ctx: UnsafeCell<QueryCtx>,
 }
 
 impl EcsCtx {
@@ -692,13 +648,6 @@ impl EcsCtx {
         EcsCtx {
             table: EcsTable::new(),
             tracker: EntityMap::new(),
-            query_ctx: UnsafeCell::new(QueryCtx::new()),
-        }
-    }
-
-    fn query_ctx_mut(&self) -> &mut QueryCtx {
-        unsafe {
-            &mut *self.query_ctx.get()
         }
     }
 
@@ -709,18 +658,12 @@ impl EcsCtx {
     pub fn bare_insert_{{id}}(&mut self, entity: EntityId, value: {{container}}<{{type}}>) {
         self.table.bare_insert_{{id}}(entity, value);
         self.tracker.entry(entity).or_insert_with(ComponentTypeSet::new).insert_{{id}}();
-            {{#if queried}}
-        self.set_dirty_insert_{{id}}();
-            {{/if}}
     }
         {{/if}}
 
     pub fn insert_{{id}}(&mut self, entity: EntityId, value: {{type}}) {
         self.table.insert_{{id}}(entity, value);
         self.tracker.entry(entity).or_insert_with(ComponentTypeSet::new).insert_{{id}}();
-        {{#if queried}}
-        self.set_dirty_insert_{{id}}();
-        {{/if}}
     }
 
     pub fn contains_{{id}}(&self, entity: EntityId) -> bool {
@@ -775,9 +718,6 @@ impl EcsCtx {
     pub fn insert_{{id}}(&mut self, entity: EntityId) {
         self.table.insert_{{id}}(entity);
         self.tracker.entry(entity).or_insert_with(ComponentTypeSet::new).insert_{{id}}();
-        {{#if queried}}
-        self.set_dirty_insert_{{id}}();
-        {{/if}}
     }
 
     pub fn contains_{{id}}(&self, entity: EntityId) -> bool {
@@ -796,9 +736,6 @@ impl EcsCtx {
         if let Some(true) = empty {
             self.tracker.remove(entity);
         }
-        {{#if queried}}
-        self.set_dirty_remove_{{id}}();
-        {{/if}}
 
         ret
     }
@@ -820,9 +757,6 @@ impl EcsCtx {
         if let Some(true) = empty {
             self.tracker.remove(entity);
         }
-        {{#if queried}}
-        self.set_dirty_remove_{{id}}();
-        {{/if}}
 
         ret
     }
@@ -902,15 +836,6 @@ impl EcsCtx {
         }
     {{/if}}
     }
-
-    {{#if queried}}
-    fn set_dirty_insert_{{id}}(&self) {
-        self.query_ctx_mut().dirty.{{id}}.insert = true;
-    }
-    fn set_dirty_remove_{{id}}(&self) {
-        self.query_ctx_mut().dirty.{{id}}.remove = true;
-    }
-    {{/if}}
 {{/each}}
 
     pub fn remove_component(&mut self, entity: EntityId, component_type: ComponentType) {
@@ -946,90 +871,6 @@ impl EcsCtx {
         PostActionEntityRef::new(id, self, action)
     }
 
-{{#each query}}
-    pub fn {{id}}(&self) -> {{prefix}}Iter {
-        let query_ctx = self.query_ctx_mut();
-        if query_ctx.dirty.should_populate_{{id}}() {
-
-            // identify the component with the least number of entities
-            let mut _max = usize::MAX;
-            let mut component_type = component_type::INVALID_COMPONENT;
-
-    {{#each components}}
-            let count = self.table.count_{{id}}();
-            if count < _max {
-                _max = count;
-                component_type = component_type::{{id_uppercase}};
-            }
-    {{/each}}
-
-            query_ctx.{{id}}.results.clear();
-
-            match component_type {
-    {{#each components}}
-                component_type::{{id_uppercase}} => {
-        {{#if type}}
-                    for (id, value) in self.table.{{id}}.iter() {
-            {{#if copy}}
-                        let {{id}} = *value;
-            {{else}}
-                        let {{id}} = value as *const {{type}};
-            {{/if}}
-            {{#each other_components}}
-                        let {{id}} = if let Some(component) = self.table.{{id}}(id) {
-                {{#if copy}}
-                            component
-                {{else}}
-                            component as *const {{type}}
-                {{/if}}
-                        } else {
-                            continue;
-                        };
-            {{/each}}
-                        let result = {{../prefix}}InnerResult {
-                            id: id,
-                            {{id}}: {{id}},
-            {{#each other_components}}
-                            {{id}}: {{id}},
-            {{/each}}
-                        };
-                        query_ctx.{{../id}}.results.push(result);
-                    }
-        {{else}}
-                    for id in self.table.{{id}}.iter() {
-            {{#each other_components}}
-                        let {{id}} = if let Some(component) = self.table.{{id}}(id) {
-                {{#if copy}}
-                            component
-                {{else}}
-                            component as *const {{type}}
-                {{/if}}
-                        } else {
-                            continue;
-                        };
-            {{/each}}
-                        let result = {{../prefix}}InnerResult {
-                            id: id,
-            {{#each other_components}}
-                            {{id}}: {{id}},
-            {{/each}}
-                        };
-                        query_ctx.{{../id}}.results.push(result);
-                    }
-        {{/if}}
-                }
-    {{/each}}
-                _ => panic!("Invalid component type: {}", component_type),
-            }
-
-    {{#each components}}
-            query_ctx.dirty.{{id}}.clean();
-    {{/each}}
-        }
-
-        query_ctx.{{id}}.iter()
-    }
-{{/each}}
 
     pub fn commit(&mut self, action: &mut EcsAction) {
 
@@ -1320,127 +1161,6 @@ impl<'a> EntityPopulate for ActionEntityRefMut<'a> {
     }
     {{/if}}
 {{/each}}
-}
-
-{{#each query}}
-pub struct {{prefix}}Result{{#unless all_copy}}<'a>{{/unless}} {
-    id: EntityId,
-{{#each components}}
-    {{#if type}}
-        {{#if copy}}
-    {{id}}: {{type}},
-        {{else}}
-    {{id}}: &'a {{type}},
-        {{/if}}
-    {{/if}}
-{{/each}}
-}
-
-impl{{#unless all_copy}}<'a>{{/unless}} {{prefix}}Result{{#unless all_copy}}<'a>{{/unless}} {
-
-    pub fn id(&self) -> EntityId {
-        self.id
-    }
-
-{{#each components}}
-    {{#if type}}
-        {{#if copy}}
-    pub fn {{id}}(&self) -> {{type}} {
-        self.{{id}}
-    }
-        {{else}}
-    pub fn {{id}}(&self) -> &{{type}} {
-        self.{{id}}
-    }
-        {{/if}}
-    {{/if}}
-{{/each}}
-}
-
-pub struct {{prefix}}Iter<'a> {
-    slice_iter: slice::Iter<'a, {{prefix}}InnerResult>,
-}
-
-impl<'a> Iterator for {{prefix}}Iter<'a> {
-    type Item = {{prefix}}Result{{#unless all_copy}}<'a>{{/unless}};
-    fn next(&mut self) -> Option<Self::Item> {
-        self.slice_iter.next().map(|inner| {
-            inner.to_outer_result()
-        })
-    }
-}
-
-struct {{prefix}}InnerResult {
-    id: EntityId,
-{{#each components}}
-    {{#if type}}
-        {{#if copy}}
-    {{id}}: {{type}},
-        {{else}}
-    {{id}}: *const {{type}},
-        {{/if}}
-    {{/if}}
-{{/each}}
-}
-
-impl {{prefix}}InnerResult {
-    fn to_outer_result(&self) -> {{prefix}}Result {
-{{#unless all_copy}}
-        unsafe {
-{{/unless}}
-            {{prefix}}Result {
-                id: self.id,
-{{#each components}}
-    {{#if type}}
-        {{#if copy}}
-                {{id}}: self.{{id}},
-        {{else}}
-                {{id}}: &(*self.{{id}}),
-        {{/if}}
-    {{/if}}
-{{/each}}
-            }
-{{#unless all_copy}}
-        }
-{{/unless}}
-    }
-}
-
-struct {{prefix}}QueryCtx {
-    results: Vec<{{prefix}}InnerResult>,
-}
-
-impl {{prefix}}QueryCtx {
-    fn new() -> Self {
-        {{prefix}}QueryCtx {
-            results: Vec::new(),
-        }
-    }
-
-    fn iter(&self) -> {{prefix}}Iter {
-        {{prefix}}Iter {
-            slice_iter: self.results.iter(),
-        }
-    }
-}
-{{/each}}
-
-struct QueryCtx {
-    dirty: DirtyComponentTracker,
-{{#each query}}
-    {{id}}: {{prefix}}QueryCtx,
-{{/each}}
-}
-
-impl QueryCtx {
-    fn new() -> Self {
-        QueryCtx {
-            dirty: DirtyComponentTracker::new(),
-{{#each query}}
-            {{id}}: {{prefix}}QueryCtx::new(),
-{{/each}}
-        }
-    }
 }
 
 struct FlagMoveIter<'a> {
@@ -2574,19 +2294,6 @@ fn generate_code(mut toml: String) -> String {
     let component_set_num_words = (num_components - 1) / word_bits + 1;
     json.as_object_mut().unwrap().insert("component_set_num_words".to_string(), Json::U64(component_set_num_words as u64));
 
-    let mut queried_components = json::Object::new();
-    if let Some(query) = json.as_object().unwrap().get("query") {
-        for query in query.as_object().unwrap().values() {
-            let query_obj = query.as_object().unwrap();
-            let components_json = query_obj.get("components").unwrap();
-            let components_arr = components_json.as_array().unwrap();
-            for component in components_arr {
-                let component_str = component.as_string().unwrap();
-                queried_components.insert(component_str.to_string(), Json::Boolean(true));
-            }
-        }
-    }
-
     let mut index = 0;
     for (id, component) in json.as_object_mut().unwrap().get_mut("component").unwrap().as_object_mut().unwrap().iter_mut() {
         let component_obj = component.as_object_mut().unwrap();
@@ -2604,51 +2311,10 @@ fn generate_code(mut toml: String) -> String {
             component_obj.insert(container.as_string().unwrap().to_string(), Json::Boolean(true));
         }
 
-        if queried_components.contains_key(id) {
-            component_obj.insert("queried".to_string(), Json::Boolean(true));
-        }
-
         component_clones.insert(id.to_string(), component_obj.clone());
 
         index += 1;
     }
-
-    if let Some(mut query) = json.as_object_mut().unwrap().get_mut("query") {
-        for (id, query) in query.as_object_mut().unwrap().iter_mut() {
-            let query_obj = query.as_object_mut().unwrap();
-            query_obj.insert("id".to_string(), Json::String(id.to_string()));
-            let components_json = query_obj.remove("components").unwrap();
-            let component_names = components_json.as_array().unwrap();
-            let mut component_clone_arr = json::Array::new();
-            let mut all_copy = true;
-            for component in component_names {
-                let component_str = component.as_string().unwrap();
-                let mut clone = component_clones.get(component_str).unwrap().clone();
-                let no_type = clone.get("type").is_none();
-                if !no_type && clone.get("copy").is_none() {
-                    all_copy = false;
-                }
-                let mut result_components = json::Array::new();
-                for component_inner in component_names {
-                    let component_inner_str = component_inner.as_string().unwrap();
-                    if no_type || component_inner_str != component_str {
-                        let other_clone = component_clones.get(component_inner_str).unwrap().clone();
-                        if other_clone.get("type").is_some() {
-                            result_components.push(Json::Object(other_clone));
-                        }
-                    }
-                }
-                clone.insert("other_components".to_string(), Json::Array(result_components));
-                component_clone_arr.push(Json::Object(clone));
-            }
-            if all_copy {
-                query_obj.insert("all_copy".to_string(), Json::Boolean(true));
-            }
-            query_obj.insert("components".to_string(), Json::Array(component_clone_arr));
-        }
-    }
-
-    json.as_object_mut().unwrap().insert("queried_components".to_string(), Json::Object(queried_components));
 
     let num_action_properties = if let Some(action_property) = json.search("action_property") {
         action_property.as_object().unwrap().len()
