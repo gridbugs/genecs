@@ -480,7 +480,7 @@ impl ComponentTypeSet {
 {{/each}}
 }
 
-pub struct EcsTable {
+pub struct EcsCtx {
 {{#each component}}
     {{#if type}}
         {{#if container}}
@@ -492,31 +492,50 @@ pub struct EcsTable {
     {{id}}: EntitySet,
     {{/if}}
 {{/each}}
+    tracker: EntityMap<ComponentTypeSet>,
 }
 
-impl EcsTable {
+impl EcsCtx {
     pub fn new() -> Self {
-        EcsTable {
+        EcsCtx {
 {{#each component}}
             {{id}}: {{#if type}} EntityMap::new() {{else}} EntitySet::new() {{/if}},
 {{/each}}
+            tracker: EntityMap::new(),
         }
     }
 
 {{#each component}}
     {{#if type}}
+
         {{#if container}}
-    pub fn insert_{{id}}(&mut self, entity: EntityId, value: {{type}}) {
-        self.bare_insert_{{id}}(entity, {{container}}::new(value));
-    }
     pub fn bare_insert_{{id}}(&mut self, entity: EntityId, value: {{container}}<{{type}}>) {
         self.{{id}}.insert(entity, value);
+        self.tracker.entry(entity).or_insert_with(ComponentTypeSet::new).insert_{{id}}();
     }
-        {{else}}
-    pub fn insert_{{id}}(&mut self, entity: EntityId, value: {{type}}) {
-        self.{{id}}.insert(entity, value);
+
+    pub fn bare_remove_{{id}}(&mut self, entity: EntityId) -> Option<{{container}}<{{type}}>> {
+        let ret = self.{{id}}.remove(entity);
+        let empty = self.tracker.get_mut(entity).map(|set| {
+            set.remove_{{id}}();
+            set.is_empty()
+        });
+        if let Some(true) = empty {
+            self.tracker.remove(entity);
+        }
+
+        ret
     }
         {{/if}}
+
+    pub fn insert_{{id}}(&mut self, entity: EntityId, value: {{type}}) {
+        {{#if container}}
+        self.bare_insert_{{id}}(entity, {{container}}::new(value));
+        {{else}}
+        self.{{id}}.insert(entity, value);
+        {{/if}}
+        self.tracker.entry(entity).or_insert_with(ComponentTypeSet::new).insert_{{id}}();
+    }
 
     pub fn contains_{{id}}(&self, entity: EntityId) -> bool {
         self.{{id}}.contains_key(entity)
@@ -531,7 +550,6 @@ impl EcsTable {
     }
         {{else}}
             {{#if container}}
-
     pub fn {{id}}(&self, entity: EntityId) -> Option<&{{container}}<{{type}}>> {
         self.{{id}}.get(entity)
     }
@@ -551,7 +569,6 @@ impl EcsTable {
         self.{{id}}.get(entity).map(|e| e.get() as *const {{type}})
     }
                 {{/if}}
-
             {{else}}
     pub fn {{id}}(&self, entity: EntityId) -> Option<&{{type}}> {
         self.{{id}}.get(entity)
@@ -559,197 +576,39 @@ impl EcsTable {
             {{/if}}
         {{/if}}
 
-
         {{#if container}}
     pub fn {{id}}_mut(&mut self, entity: EntityId) -> Option<&mut {{container}}<{{type}}>> {
         self.{{id}}.get_mut(entity)
     }
-    pub fn remove_{{id}}(&mut self, entity: EntityId) -> Option<{{type}}> {
-        self.bare_remove_{{id}}(entity).map(|c| c.into_inner())
-    }
-    pub fn bare_remove_{{id}}(&mut self, entity: EntityId) -> Option<{{container}}<{{type}}>> {
-        self.{{id}}.remove(entity)
-    }
         {{else}}
     pub fn {{id}}_mut(&mut self, entity: EntityId) -> Option<&mut {{type}}> {
         self.{{id}}.get_mut(entity)
-    }
-    pub fn remove_{{id}}(&mut self, entity: EntityId) -> Option<{{type}}> {
-        self.{{id}}.remove(entity)
     }
         {{/if}}
     {{else}}
     pub fn insert_{{id}}(&mut self, entity: EntityId) {
         self.{{id}}.insert(entity);
+        self.tracker.entry(entity).or_insert_with(ComponentTypeSet::new).insert_{{id}}();
     }
 
     pub fn contains_{{id}}(&self, entity: EntityId) -> bool {
         self.{{id}}.contains(entity)
     }
-    pub fn remove_{{id}}(&mut self, entity: EntityId) -> bool {
-        self.{{id}}.remove(entity)
-    }
     {{/if}}
 
-
-    pub fn count_{{id}}(&self) -> usize {
-        self.{{id}}.len()
+    {{#if container}}
+    pub fn remove_{{id}}(&mut self, entity: EntityId) -> Option<{{type}}> {
+        self.bare_remove_{{id}}(entity).map(|c| c.into_inner())
     }
-
-    pub fn clear_{{id}}(&mut self) {
-        self.{{id}}.clear();
-    }
-{{/each}}
-
-    pub fn remove_component(&mut self, entity: EntityId, component_type: ComponentType) {
-        match component_type {
-{{#each component}}
-            component_type::{{id_uppercase}} => { self.remove_{{id}}(entity); }
-{{/each}}
-            _ => { panic!("Invalid component type: {}", component_type); }
-        }
-    }
-
-    pub fn remove_components(&mut self, entity: EntityId, component_type_set: ComponentTypeSet) {
-        for component_type in component_type_set.iter() {
-            self.remove_component(entity, component_type);
-        }
-    }
-
-    pub fn push_component_entity_ids(&self, component_type: ComponentType, ids: &mut Vec<EntityId>) {
-        match component_type {
-{{#each component}}
-    {{#if type}}
-            component_type::{{id_uppercase}} => {
-                for id in self.{{id}}.keys() {
-                    ids.push(id);
-                }
-            },
     {{else}}
-            component_type::{{id_uppercase}} => {
-                for id in self.{{id}}.iter() {
-                    ids.push(id);
-                }
-            },
-    {{/if}}
-{{/each}}
-            _ => panic!("Invalid component type: {}", component_type),
-        }
-    }
-}
-
-pub struct EcsCtx {
-    table: EcsTable,
-    tracker: EntityMap<ComponentTypeSet>,
-}
-
-impl EcsCtx {
-    pub fn new() -> Self {
-        EcsCtx {
-            table: EcsTable::new(),
-            tracker: EntityMap::new(),
-        }
-    }
-
-{{#each component}}
-    {{#if type}}
-
-        {{#if container}}
-    pub fn bare_insert_{{id}}(&mut self, entity: EntityId, value: {{container}}<{{type}}>) {
-        self.table.bare_insert_{{id}}(entity, value);
-        self.tracker.entry(entity).or_insert_with(ComponentTypeSet::new).insert_{{id}}();
-    }
-        {{/if}}
-
-    pub fn insert_{{id}}(&mut self, entity: EntityId, value: {{type}}) {
-        self.table.insert_{{id}}(entity, value);
-        self.tracker.entry(entity).or_insert_with(ComponentTypeSet::new).insert_{{id}}();
-    }
-
-    pub fn contains_{{id}}(&self, entity: EntityId) -> bool {
-        self.table.contains_{{id}}(entity)
-    }
-
-        {{#if copy}}
-    pub fn {{id}}(&self, entity: EntityId) -> Option<{{type}}> {
-        self.table.{{id}}(entity)
-    }
-    pub fn {{id}}_ref(&self, entity: EntityId) -> Option<&{{type}}> {
-        self.table.{{id}}_ref(entity)
-    }
-        {{else}}
-            {{#if container}}
-    pub fn {{id}}(&self, entity: EntityId) -> Option<&{{container}}<{{type}}>> {
-        self.table.{{id}}(entity)
-    }
-                {{#if RefCell}}
-    pub fn {{id}}_borrow(&self, entity: EntityId) -> Option<Ref<{{type}}>> {
-        self.table.{{id}}_borrow(entity)
-    }
-    pub fn {{id}}_borrow_mut(&self, entity: EntityId) -> Option<RefMut<{{type}}>> {
-        self.table.{{id}}_borrow_mut(entity)
-    }
-                {{/if}}
-                {{#if UnsafeCell}}
-    pub fn {{id}}_unsafe_get_mut(&self, entity: EntityId) -> Option<*mut {{type}}> {
-        self.table.{{id}}_unsafe_get_mut(entity)
-    }
-    pub fn {{id}}_unsafe_get(&self, entity: EntityId) -> Option<*const {{type}}> {
-        self.table.{{id}}_unsafe_get(entity)
-    }
-                {{/if}}
-            {{else}}
-    pub fn {{id}}(&self, entity: EntityId) -> Option<&{{type}}> {
-        self.table.{{id}}(entity)
-    }
-            {{/if}}
-        {{/if}}
-
-        {{#if container}}
-    pub fn {{id}}_mut(&mut self, entity: EntityId) -> Option<&mut {{container}}<{{type}}>> {
-        self.table.{{id}}_mut(entity)
-    }
-        {{else}}
-    pub fn {{id}}_mut(&mut self, entity: EntityId) -> Option<&mut {{type}}> {
-        self.table.{{id}}_mut(entity)
-    }
-        {{/if}}
-    {{else}}
-    pub fn insert_{{id}}(&mut self, entity: EntityId) {
-        self.table.insert_{{id}}(entity);
-        self.tracker.entry(entity).or_insert_with(ComponentTypeSet::new).insert_{{id}}();
-    }
-
-    pub fn contains_{{id}}(&self, entity: EntityId) -> bool {
-        self.table.contains_{{id}}(entity)
-    }
-    {{/if}}
-
-    {{#if type}}
-        {{#if container}}
-    pub fn bare_remove_{{id}}(&mut self, entity: EntityId) -> Option<{{container}}<{{type}}>> {
-        let ret = self.table.bare_remove_{{id}}(entity);
-        let empty = self.tracker.get_mut(entity).map(|set| {
-            set.remove_{{id}}();
-            set.is_empty()
-        });
-        if let Some(true) = empty {
-            self.tracker.remove(entity);
-        }
-
-        ret
-    }
-        {{/if}}
-    {{/if}}
-
     pub fn remove_{{id}}(&mut self, entity: EntityId)
-    {{#if type}}
+        {{#if type}}
         -> Option<{{type}}>
-    {{else}}
+        {{else}}
         -> bool
-    {{/if}}
+        {{/if}}
     {
-        let ret = self.table.remove_{{id}}(entity);
+        let ret = self.{{id}}.remove(entity);
         let empty = self.tracker.get_mut(entity).map(|set| {
             set.remove_{{id}}();
             set.is_empty()
@@ -760,6 +619,7 @@ impl EcsCtx {
 
         ret
     }
+    {{/if}}
 
     pub fn remove_{{id}}_into(&mut self, entity: EntityId, action: &mut EcsAction) {
     {{#if type}}
@@ -855,7 +715,9 @@ impl EcsCtx {
 
     pub fn remove_entity(&mut self, entity: EntityId) {
         if let Some(set) = self.tracker.remove(entity) {
-            self.table.remove_components(entity, set);
+            for component_type in set.iter() {
+                self.remove_component(entity, component_type);
+            }
         }
     }
 
@@ -1659,18 +1521,18 @@ impl EcsAction {
     }
         {{#unless container}}
     pub fn {{id}}_positive_iter<'a>(&'a self, ecs: &'a EcsCtx) -> TypedActionPositiveIter<'a, {{type}}> {
-        self.{{id}}.positive_iter(&ecs.table.{{id}})
+        self.{{id}}.positive_iter(&ecs.{{id}})
     }
     pub fn {{id}}_negative_iter<'a>(&'a self, ecs: &'a EcsCtx) -> TypedActionNegativeIter<'a, {{type}}> {
-        self.{{id}}.negative_iter(&ecs.table.{{id}})
+        self.{{id}}.negative_iter(&ecs.{{id}})
     }
         {{/unless}}
     {{else}}
     pub fn {{id}}_positive_iter<'a>(&'a self, ecs: &'a EcsCtx) -> FlagActionPositiveIter<'a> {
-        self.{{id}}.positive_iter(&ecs.table.{{id}})
+        self.{{id}}.positive_iter(&ecs.{{id}})
     }
     pub fn {{id}}_negative_iter<'a>(&'a self, ecs: &'a EcsCtx) -> FlagActionNegativeIter<'a> {
-        self.{{id}}.negative_iter(&ecs.table.{{id}})
+        self.{{id}}.negative_iter(&ecs.{{id}})
     }
     pub fn insert_{{id}}(&mut self, entity: EntityId) {
         self.{{id}}.insertions.insert(entity);
