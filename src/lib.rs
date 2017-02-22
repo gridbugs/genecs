@@ -821,6 +821,59 @@ impl EcsCtx {
     pub fn entity_iter<I: Iterator<Item=EntityId>>(&self, iter: I) -> EntityRefIter<I> {
         EntityRefIter::new(self, iter)
     }
+
+{{#each component}}
+    {{#if type}}
+
+    pub fn {{id}}_id_iter(&self) ->
+        {{#if container}}
+            {{#if RefCell}}
+        EntityMapKeys<RefCell<{{type}}>>
+            {{/if}}
+            {{#if UnsafeCell}}
+        EntityMapKeys<UnsafeCell<{{type}}>>
+            {{/if}}
+        {{else}}
+        EntityMapKeys<{{type}}>
+        {{/if}}
+
+    {
+        self.{{id}}.keys()
+    }
+
+    pub fn {{id}}_iter(&self) ->
+        {{#if container}}
+            {{#if RefCell}}
+        EntityMapIter<RefCell<{{type}}>>
+            {{/if}}
+            {{#if UnsafeCell}}
+        EntityMapIter<UnsafeCell<{{type}}>>
+            {{/if}}
+        {{else}}
+            {{#if copy}}
+        EntityMapCopyIter<{{type}}>
+            {{else}}
+        EntityMapIter<{{type}}>
+            {{/if}}
+        {{/if}}
+
+    {
+        {{#if copy}}
+            self.{{id}}.copy_iter()
+        {{else}}
+            self.{{id}}.iter()
+        {{/if}}
+    }
+
+    {{else}}
+
+    pub fn {{id}}_id_iter(&self) -> EntitySetIter {
+        self.{{id}}.iter()
+    }
+
+    {{/if}}
+
+{{/each}}
 }
 
 #[derive(Serialize, Deserialize)]
