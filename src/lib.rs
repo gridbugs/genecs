@@ -1617,6 +1617,10 @@ impl<T> TypedActionProfile<T> {
         self.insertions.get(id)
     }
 
+    pub fn get_mut(&mut self, id: EntityId) -> Option<&mut T> {
+        self.insertions.get_mut(id)
+    }
+
     pub fn contains(&self, id: EntityId) -> bool {
         self.insertions.contains_key(id)
     }
@@ -1715,6 +1719,15 @@ impl EcsAction {
     pub fn {{id}}_profile(&self) -> &TypedActionProfile<{{type}}> {
         &self.{{id}}
     }
+    pub fn {{id}}_profile_mut(&mut self) -> &mut TypedActionProfile<{{type}}> {
+        &mut self.{{id}}
+    }
+    pub fn {{id}}_mut(&mut self, id: EntityId) -> Option<&mut {{type}}> {
+        self.{{id}}_profile_mut().get_mut(id)
+    }
+    pub fn contains_{{id}}(&self, id: EntityId) -> bool {
+        self.{{id}}_profile().contains(id)
+    }
         {{#if copy}}
     pub fn {{id}}(&self, id: EntityId) -> Option<{{type}}> {
         self.{{id}}_ref(id).map(|r| *r)
@@ -1727,9 +1740,6 @@ impl EcsAction {
         self.{{id}}_profile().get(id)
     }
         {{/if}}
-    pub fn contains_{{id}}(&self, id: EntityId) -> bool {
-        self.{{id}}_profile().contains(id)
-    }
         {{#unless container}}
     pub fn {{id}}_positive_iter<'a>(&'a self, ecs: &'a EcsCtx) -> TypedActionPositiveIter<'a, {{type}}> {
         self.{{id}}.positive_iter(&ecs.{{id}})
@@ -2153,6 +2163,12 @@ impl<'a> ActionEntityRefMut<'a> {
     pub fn remove_{{id}}(&mut self) {
         self.action.remove_{{id}}(self.id);
     }
+
+    {{#if type}}
+    pub fn {{id}}_mut(&mut self, id: EntityId) -> Option<&mut {{type}}> {
+        self.action.{{id}}_mut(id)
+    }
+    {{/if}}
 {{/each}}
 }
 
