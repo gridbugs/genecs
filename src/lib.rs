@@ -1526,6 +1526,10 @@ impl FlagActionProfile {
     pub fn removal_iter(&self) -> EntityHashSetIter {
         self.removals.iter()
     }
+
+    pub fn contains(&self, id: EntityId) -> bool {
+        self.insertions.contains(id)
+    }
 }
 
 pub struct FlagActionPositiveIter<'a> {
@@ -1608,11 +1612,23 @@ impl<T> TypedActionProfile<T> {
         self.moves.clear();
         self.changed_entities.clear();
     }
+
+    pub fn get(&self, id: EntityId) -> Option<&T> {
+        self.insertions.get(id)
+    }
+
+    pub fn contains(&self, id: EntityId) -> bool {
+        self.insertions.contains_key(id)
+    }
 }
 
 impl<T: Copy> TypedActionProfile<T> {
     pub fn insertion_copy_iter(&self) -> EntityHashMapCopyIter<T> {
         self.insertions.copy_iter()
+    }
+
+    pub fn get_copy(&self, id: EntityId) -> Option<T> {
+        self.get(id).map(|r| *r)
     }
 }
 pub struct TypedActionPositiveIter<'a, T: 'a> {
@@ -1696,8 +1712,23 @@ impl EcsAction {
         self.{{id}}.changed_entities.insert(entity);
         self.changed_components.insert_{{id}}();
     }
-    pub fn {{id}}(&self) -> &TypedActionProfile<{{type}}> {
+    pub fn {{id}}_profile(&self) -> &TypedActionProfile<{{type}}> {
         &self.{{id}}
+    }
+        {{#if copy}}
+    pub fn {{id}}(&self, id: EntityId) -> Option<{{type}}> {
+        self.{{id}}_ref(id).map(|r| *r)
+    }
+    pub fn {{id}}_ref(&self, id: EntityId) -> Option<&{{type}}> {
+        self.{{id}}_profile().get(id)
+    }
+        {{else}}
+    pub fn {{id}}(&self, id: EntityId) -> Option<&{{type}}> {
+        self.{{id}}_profile().get(id)
+    }
+        {{/if}}
+    pub fn contains_{{id}}(&self, id: EntityId) -> bool {
+        self.{{id}}_profile().contains(id)
     }
         {{#unless container}}
     pub fn {{id}}_positive_iter<'a>(&'a self, ecs: &'a EcsCtx) -> TypedActionPositiveIter<'a, {{type}}> {
@@ -1708,6 +1739,9 @@ impl EcsAction {
     }
         {{/unless}}
     {{else}}
+    pub fn contains_{{id}}(&self, id: EntityId) -> bool {
+        self.{{id}}.contains(id)
+    }
     pub fn {{id}}_positive_iter<'a>(&'a self, ecs: &'a EcsCtx) -> FlagActionPositiveIter<'a> {
         self.{{id}}.positive_iter(&ecs.{{id}})
     }
@@ -1719,7 +1753,7 @@ impl EcsAction {
         self.{{id}}.changed_entities.insert(entity);
         self.changed_components.insert_{{id}}();
     }
-    pub fn {{id}}(&self) -> &FlagActionProfile {
+    pub fn {{id}}_profile(&self) -> &FlagActionProfile {
         &self.{{id}}
     }
     {{/if}}
@@ -1794,6 +1828,10 @@ impl EcsAction {
         self.properties.remove_{{id}}()
     }
 {{/each}}
+
+    pub fn entity(&self, id: EntityId) -> ActionEntityRef {
+        ActionEntityRef::new(id, self)
+    }
 
     pub fn entity_mut(&mut self, id: EntityId) -> ActionEntityRefMut {
         ActionEntityRefMut::new(id, self)
@@ -2115,6 +2153,44 @@ impl<'a> ActionEntityRefMut<'a> {
     pub fn remove_{{id}}(&mut self) {
         self.action.remove_{{id}}(self.id);
     }
+{{/each}}
+}
+
+pub struct ActionEntityRef<'a> {
+    id: EntityId,
+    action: &'a EcsAction,
+}
+
+impl<'a> ActionEntityRef<'a> {
+    fn new(id: EntityId, action: &'a EcsAction) -> Self {
+        ActionEntityRef {
+            id: id,
+            action: action,
+        }
+    }
+
+    pub fn id(self) -> EntityId {
+        self.id
+    }
+
+{{#each component}}
+    pub fn contains_{{id}}(self) -> bool {
+        self.action.contains_{{id}}(self.id)
+    }
+    {{#if type}}
+        {{#if copy}}
+    pub fn {{id}}(self) -> Option<{{type}}> {
+        self.action.{{id}}(self.id)
+    }
+    pub fn {{id}}_ref(self) -> Option<&'a {{type}}> {
+        self.action.{{id}}_ref(self.id)
+    }
+        {{else}}
+    pub fn {{id}}(self) -> Option<&'a {{type}}> {
+        self.action.{{id}}(self.id)
+    }
+        {{/if}}
+    {{/if}}
 {{/each}}
 }
 
