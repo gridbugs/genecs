@@ -874,6 +874,13 @@ impl EcsCtx {
     {{/if}}
 
 {{/each}}
+
+    pub fn clear(&mut self) {
+{{#each component}}
+        self.{{id}}.clear();
+{{/each}}
+        self.tracker.clear();
+    }
 }
 
 #[derive(Serialize, Deserialize)]
